@@ -119,9 +119,10 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
         filter.authors.push_back(kind);
       }
     }
-    for (nlohmann::json::iterator it = data[i].begin(); it != data[i].end(); ++it) {
+    for (nlohmann::json::iterator it = data[i].begin(); it != data[i].end();
+         ++it) {
       if (it.key().at(0) == '#' && it.value().is_array()) {
-        std::vector<std::string> tag = {it.key().c_str()+1};
+        std::vector<std::string> tag = {it.key().c_str() + 1};
         for (const auto v : it.value()) {
           tag.push_back(v);
         }
@@ -157,7 +158,7 @@ static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
 }
 
 static bool matched_filters(const std::vector<filter_t> &filters,
-                            const event_t& ev) {
+                            const event_t &ev) {
   auto found = false;
   for (const auto &filter : filters) {
     if (!filter.ids.empty()) {
@@ -271,6 +272,23 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
   }
 }
 
+static void http_request_callback(ws28::HTTPRequest& req, ws28::HTTPResponse& resp) {
+  if (req.method == "GET" && req.path == "/") {
+    resp.status(200);
+    resp.header("content-type", "text/html; charset=UTF-8");
+    resp.send("cagliostr\n");
+  }
+}
+
+static void close_callback(ws28::Client *client) {
+  for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
+    if (it->second.client == client) {
+      subscribers.erase(it);
+      break;
+    }
+  }
+}
+
 static void data_callback(ws28::Client *client, char *data, size_t len,
                           int opcode) {
   std::string s;
@@ -311,6 +329,8 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
 int main(int argc, char *argv[]) {
   ws28::Server server{uv_default_loop(), nullptr};
   server.SetClientDataCallback(data_callback);
+  server.SetClientDisconnectedCallback(close_callback);
+  server.SetHTTPCallback(http_request_callback);
   server.Listen(7447);
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   return 0;
