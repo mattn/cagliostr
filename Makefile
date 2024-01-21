@@ -6,7 +6,7 @@ SRCS = \
 
 OBJS = $(subst .cc,.o,$(subst .cxx,.o,$(subst .cpp,.o,$(SRCS))))
 
-CXXFLAGS = -std=c++17 -I deps/matheus28-ws28/src -I deps/dcdpr-libbech32/include
+CXXFLAGS = -std=c++17 -I deps/matheus28-ws28/src -I deps/dcdpr-libbech32/include -I deps/nlohmann-json/include -I deps/secp256k1/include
 LIBS = -luv -lcrypto -lssl -lsecp256k1
 TARGET = cagliostr
 ifeq ($(OS),Windows_NT)
