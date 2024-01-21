@@ -119,13 +119,15 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
         filter.authors.push_back(kind);
       }
     }
-    /*
-    if (data[i].count("tags") > 0) {
-      for (const auto kind : data[i]["tags"]) {
-        filter.authors.push_back(kind);
+    for (nlohmann::json::iterator it = data[i].begin(); it != data[i].end(); ++it) {
+      if (it.key().starts_with("#") && it.value().is_array()) {
+        std::vector<std::string> tag = {it.key().c_str()+1};
+        for (const auto v : it.value()) {
+          tag.push_back(v);
+        }
+        filter.tags.push_back(tag);
       }
     }
-    */
     if (data[i].count("since") > 0) {
       filter.since = data[i]["since"];
     }
