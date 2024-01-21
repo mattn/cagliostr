@@ -12,6 +12,7 @@ include_directories(
 	${PROJECT_SOURCE_DIR}/deps/dcdpr-libbech32/include
 	${PROJECT_SOURCE_DIR}/deps/matheus28-ws28/src
 	${PROJECT_SOURCE_DIR}/deps/nlohmann-json/include
+	${PROJECT_SOURCE_DIR}/deps/libuv-libuv/include
 )
 
 add_executable(cagliostr main.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
