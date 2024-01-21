@@ -12,7 +12,6 @@ $ ./cagliostr
 
 * libsecp256k1
 * OpenSSL
-* libuv
 
 ## Installation
 
