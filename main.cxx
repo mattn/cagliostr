@@ -6,10 +6,10 @@
 #include <stdexcept>
 #include <string>
 
-#include <openssl/evp.h>
-#include <openssl/x509v3.h>
 #include <libbech32/bech32.h>
 #include <nlohmann/json.hpp>
+#include <openssl/evp.h>
+#include <openssl/x509v3.h>
 
 #include <secp256k1.h>
 #include <secp256k1_schnorrsig.h>
@@ -101,8 +101,8 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
       continue;
     }
     filter_t filter = {
-      .since = 0,
-      .until = 0,
+        .since = 0,
+        .until = 0,
     };
     if (data[i].count("ids") > 0) {
       for (const auto id : data[i]["ids"]) {
@@ -154,6 +154,66 @@ static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
   subscribers.erase(sub);
 }
 
+static bool matched_filters(const std::vector<filter_t> &filters,
+                            const event_t& ev) {
+  auto found = false;
+  for (const auto &filter : filters) {
+    if (!filter.ids.empty()) {
+      auto result = std::find(filter.ids.begin(), filter.ids.end(), ev.id);
+      if (result == filter.ids.end()) {
+        continue;
+      }
+    }
+    if (!filter.authors.empty()) {
+      auto result =
+          std::find(filter.authors.begin(), filter.authors.end(), ev.pubkey);
+      if (result == filter.authors.end()) {
+        continue;
+      }
+    }
+    if (!filter.kinds.empty()) {
+      auto result =
+          std::find(filter.kinds.begin(), filter.kinds.end(), ev.kind);
+      if (result == filter.kinds.end()) {
+        continue;
+      }
+    }
+    if (filter.since > 0) {
+      if (filter.since <= ev.created_at) {
+        continue;
+      }
+    }
+    if (filter.until > 0) {
+      if (ev.created_at <= filter.until) {
+        continue;
+      }
+    }
+    if (!filter.tags.empty()) {
+      auto matched = false;
+      for (const auto &tag : ev.tags) {
+        if (tag.size() < 2)
+          continue;
+        for (const auto &mtag : filter.tags) {
+          if (mtag.size() < 2)
+            continue;
+          if (tag == mtag) {
+            matched = true;
+            break;
+          }
+        }
+        if (matched) {
+          break;
+        }
+      }
+      if (!matched) {
+        continue;
+      }
+    }
+    found = true;
+  }
+  return found;
+}
+
 static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
   auto ej = data[1];
   event_t ev;
@@ -198,61 +258,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
       }
       std::cout << s.first << std::endl;
       auto found = false;
-      for (const auto &filter : s.second.filters) {
-        if (!filter.ids.empty()) {
-          auto result = std::find(filter.ids.begin(), filter.ids.end(), ev.id);
-          if (result == filter.ids.end()) {
-            continue;
-          }
-        }
-        if (!filter.authors.empty()) {
-          auto result = std::find(filter.authors.begin(), filter.authors.end(),
-                                  ev.pubkey);
-          if (result == filter.authors.end()) {
-            continue;
-          }
-        }
-        if (!filter.kinds.empty()) {
-          auto result =
-              std::find(filter.kinds.begin(), filter.kinds.end(), ev.kind);
-          if (result == filter.kinds.end()) {
-            continue;
-          }
-        }
-        if (filter.since > 0) {
-          if (filter.since <= ev.created_at) {
-            continue;
-          }
-        }
-        if (filter.until > 0) {
-          if (ev.created_at <= filter.until) {
-            continue;
-          }
-        }
-        if (!filter.tags.empty()) {
-          auto matched = false;
-          for (const auto &tag : ev.tags) {
-            if (tag.size() < 2)
-              continue;
-            for (const auto &mtag : filter.tags) {
-              if (mtag.size() < 2)
-                continue;
-              if (tag == mtag) {
-                matched = true;
-                break;
-              }
-            }
-            if (matched) {
-              break;
-            }
-          }
-          if (!matched) {
-            continue;
-          }
-        }
-        found = true;
-      }
-      if (found) {
+      if (matched_filters(s.second.filters, ev)) {
         nlohmann::json data = {"EVENT", s.first, ej};
         relay_send(s.second.client, data);
       }
