@@ -14,10 +14,6 @@ include_directories(
 	${PROJECT_SOURCE_DIR}/deps/nlohmann-json/include
 )
 
-if (CMAKE_COMPILER_IS_GNUCC)
-    set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/deps/libuv/include")
-endif()
-
 add_executable(cagliostr main.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
 target_link_libraries(cagliostr crypto)
 target_link_libraries(cagliostr ssl)
