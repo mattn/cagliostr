@@ -1,5 +1,5 @@
 [submodule "deps/dcdpr-libbech32"]
-	path = deps/libbech32
+	path = deps/dcdpr-libbech32
 	url = https://github.com/dcdpr/libbech32
 [submodule "deps/nlohmann-json"]
 	path = deps/nlohmann-json
