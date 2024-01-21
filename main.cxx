@@ -120,7 +120,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
       }
     }
     for (nlohmann::json::iterator it = data[i].begin(); it != data[i].end(); ++it) {
-      if (it.key().starts_with("#") && it.value().is_array()) {
+      if (it.key().at(0) == '#' && it.value().is_array()) {
         std::vector<std::string> tag = {it.key().c_str()+1};
         for (const auto v : it.value()) {
           tag.push_back(v);
