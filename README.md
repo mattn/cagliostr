@@ -15,7 +15,8 @@ $ ./cagliostr
 ## Installation
 
 ```
-$ mkdir build && cd build && cmake ..
+$ git submodule update --init --recursive
+$ cmake -B build && cmake --build build
 ```
 
 ## License
