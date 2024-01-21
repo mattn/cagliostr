@@ -7,3 +7,6 @@
 [submodule "deps/matheus28-ws28"]
 	path = deps/matheus28-ws28
 	url = https://github.com/Matheus28/ws28
+[submodule "deps/libuv-libuv"]
+	path = deps/libuv-libuv
+	url = https://github.com/libuv/libuv

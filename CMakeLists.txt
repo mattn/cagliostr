@@ -15,7 +15,33 @@ include_directories(
 )
 
 add_executable(cagliostr main.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
+
+set(LIBUV_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/.libs/libuv.a)
+add_custom_target(libuv DEPENDS ${LIBUV_LIBRARIES})
+add_custom_command(
+	OUTPUT ${LIBUV_LIBRARIES}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv
+	COMMAND sh
+    ARGS -c '[ ! -f .libs/libuv.a ]; ./autogen.sh && ./configure --enable-static --disable-shared && make -k libuv.la'
+	)
+add_dependencies(cagliostr libuv)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/.libs)
 target_link_libraries(cagliostr crypto)
 target_link_libraries(cagliostr ssl)
-target_link_libraries(cagliostr uv)
 target_link_libraries(cagliostr secp256k1)
+target_link_libraries(cagliostr ${LIBUV_LIBRARIES})
+
+set(LIBSECP256K1_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/.libs/libuv.a)
+add_custom_target(libuv DEPENDS ${LIBSECP256K1_LIBRARIES})
+add_custom_command(
+    OUTPUT ${LIBSECP256K1_LIBRARIES}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv
+	COMMAND sh
+    ARGS -c '[ ! -f .libs/libuv.a ]; ./autogen.sh && ./configure --enable-static --disable-shared && make -k libuv.la'
+	)
+add_dependencies(cagliostr libuv)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/.libs)
+target_link_libraries(cagliostr crypto)
+target_link_libraries(cagliostr ssl)
+target_link_libraries(cagliostr secp256k1)
+target_link_libraries(cagliostr ${LIBSECP256K1_LIBRARIES})
