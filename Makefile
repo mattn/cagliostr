@@ -1,12 +1,12 @@
 SRCS = \
 	main.cxx \
-	../ws28/src/Server.cpp \
-	../ws28/src/Client.cpp \
-	../ws28/src/base64.cpp
+	deps/matheus28-ws28/src/Server.cpp \
+	deps/matheus28-ws28/src/Client.cpp \
+	deps/matheus28-ws28/src/base64.cpp
 
 OBJS = $(subst .cc,.o,$(subst .cxx,.o,$(subst .cpp,.o,$(SRCS))))
 
-CXXFLAGS = -std=c++17 -I ../ws28/src -I ../libbech32/include
+CXXFLAGS = -std=c++17 -I deps/matheus28-ws28/src -I deps/dcdpr-libbech32/include
 LIBS = -luv -lcrypto -lssl -lsecp256k1
 TARGET = cagliostr
 ifeq ($(OS),Windows_NT)
