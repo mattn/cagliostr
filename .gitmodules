@@ -10,3 +10,6 @@
 [submodule "deps/libuv-libuv"]
 	path = deps/libuv-libuv
 	url = https://github.com/libuv/libuv
+[submodule "deps/bitcoin-core-libsecp256k1"]
+	path = deps/bitcoin-core-libsecp256k1
+	url = https://github.com/bitcoin-core/secp256k1

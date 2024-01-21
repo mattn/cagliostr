@@ -26,22 +26,20 @@ add_custom_command(
 	)
 add_dependencies(cagliostr libuv)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/.libs)
+
+set(LIBSECP256K1_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src/libsecp256k1.a)
+add_custom_target(libsecp256k1 DEPENDS ${LIBSECP256K1_LIBRARIES})
+add_custom_command(
+    OUTPUT ${LIBSECP256K1_LIBRARIES}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1
+	COMMAND sh
+    ARGS -c 'mkdir -p build && cd build && cmake -DBUILD_SHARED_LIBS=off .. && make'
+	)
+add_dependencies(cagliostr libsecp256k1)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src)
+
 target_link_libraries(cagliostr crypto)
 target_link_libraries(cagliostr ssl)
 target_link_libraries(cagliostr secp256k1)
 target_link_libraries(cagliostr ${LIBUV_LIBRARIES})
-
-set(LIBSECP256K1_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/.libs/libuv.a)
-add_custom_target(libuv DEPENDS ${LIBSECP256K1_LIBRARIES})
-add_custom_command(
-    OUTPUT ${LIBSECP256K1_LIBRARIES}
-	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv
-	COMMAND sh
-    ARGS -c '[ ! -f .libs/libuv.a ]; ./autogen.sh && ./configure --enable-static --disable-shared && make -k libuv.la'
-	)
-add_dependencies(cagliostr libuv)
-link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/.libs)
-target_link_libraries(cagliostr crypto)
-target_link_libraries(cagliostr ssl)
-target_link_libraries(cagliostr secp256k1)
 target_link_libraries(cagliostr ${LIBSECP256K1_LIBRARIES})

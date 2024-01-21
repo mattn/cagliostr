@@ -10,7 +10,6 @@ $ ./cagliostr
 
 ## Requirements
 
-* libsecp256k1
 * OpenSSL
 
 ## Installation
