@@ -17,7 +17,7 @@ $ ./cagliostr
 ## Installation
 
 ```
-$ make
+$ mkdir build && cd build && cmake ..
 ```
 
 ## License
