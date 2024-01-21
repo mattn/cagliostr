@@ -62,7 +62,7 @@ static std::vector<uint8_t> hex2bytes(const std::string &hex) {
 
 static void relay_send(ws28::Client *client, nlohmann::json data) {
   auto s = data.dump();
-  std::cout << s << std::endl;
+  std::cout << "<< " << s << std::endl;
   client->Send(s.data(), s.size());
 }
 
@@ -237,7 +237,6 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
     EVP_Digest(dump.data(), dump.size(), digest, nullptr, EVP_sha256(),
                nullptr);
 
-    std::cout << dump << std::endl;
     auto id = hex2string(digest, 32);
     if (id != ev.id) {
       relay_final(client, "", "error: invalid id");
@@ -259,8 +258,6 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
       if (id == s.first) {
         continue;
       }
-      std::cout << s.first << std::endl;
-      auto found = false;
       if (matched_filters(s.second.filters, ev)) {
         nlohmann::json data = {"EVENT", s.first, ej};
         relay_send(s.second.client, data);
@@ -268,11 +265,12 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
     }
     relay_final(client, "", "OK");
   } catch (std::exception &e) {
-    std::cout << e.what() << std::endl;
+    std::cerr << "!! " << e.what() << std::endl;
   }
 }
 
-static void http_request_callback(ws28::HTTPRequest& req, ws28::HTTPResponse& resp) {
+static void http_request_callback(ws28::HTTPRequest &req,
+                                  ws28::HTTPResponse &resp) {
   if (req.method == "GET" && req.path == "/") {
     resp.status(200);
     resp.header("content-type", "text/html; charset=UTF-8");
@@ -293,7 +291,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
                           int opcode) {
   std::string s;
   s.append(data, len);
-  std::cout << s << std::endl;
+  std::cout << ">> " << s << std::endl;
   auto payload = nlohmann::json::parse(s);
 
   if (!payload.is_array() || payload.size() < 2) {
@@ -326,12 +324,27 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   client->Close(0);
 }
 
+void signal_handler(uv_signal_t *req, int signum) {
+  uv_signal_stop(req);
+  std::cerr << "!! SIGINT" << std::endl;
+  for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
+    relay_final(it->second.client, it->first, "shutdown...");
+  }
+
+  uv_stop(uv_default_loop());
+}
+
 int main(int argc, char *argv[]) {
-  ws28::Server server{uv_default_loop(), nullptr};
+  uv_loop_t *loop = uv_default_loop();
+  ws28::Server server{loop, nullptr};
   server.SetClientDataCallback(data_callback);
   server.SetClientDisconnectedCallback(close_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(7447);
+
+  uv_signal_t sig;
+  uv_signal_init(loop, &sig);
+  uv_signal_start(&sig, signal_handler, SIGINT);
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   return 0;
 }
