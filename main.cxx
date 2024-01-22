@@ -43,7 +43,7 @@ typedef struct {
 
 std::map<std::string, subscriber_t> subscribers;
 
-static std::string hex2string(const uint8_t *data, int len) {
+static std::string bytes2hex(const uint8_t *data, int len) {
   std::stringstream ss;
   ss << std::hex;
   for (int i(0); i < len; ++i)
@@ -61,7 +61,7 @@ static std::vector<uint8_t> hex2bytes(const std::string &hex) {
   return bytes;
 }
 
-static void relay_send(ws28::Client *client, nlohmann::json data) {
+static void relay_send(ws28::Client *client, nlohmann::json& data) {
   auto s = data.dump();
   std::cout << "<< " << s << std::endl;
   client->Send(s.data(), s.size());
@@ -153,7 +153,6 @@ static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
   nlohmann::json reply = {"CLOSED", sub, "OK"};
   relay_send(client, reply);
   client->Close(0);
-  relay_final(client, sub, "OK");
   ss.client->Destroy();
   subscribers.erase(sub);
 }
@@ -238,7 +237,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
     EVP_Digest(dump.data(), dump.size(), digest, nullptr, EVP_sha256(),
                nullptr);
 
-    auto id = hex2string(digest, 32);
+    auto id = bytes2hex(digest, 32);
     if (id != ev.id) {
       relay_final(client, "", "error: invalid id");
       return;
@@ -325,7 +324,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   client->Close(0);
 }
 
-void signal_handler(uv_signal_t *req, int signum) {
+static void signal_handler(uv_signal_t *req, int signum) {
   uv_signal_stop(req);
   std::cerr << "!! SIGINT" << std::endl;
   for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
