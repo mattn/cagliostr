@@ -13,3 +13,6 @@
 [submodule "deps/bitcoin-core-libsecp256k1"]
 	path = deps/bitcoin-core-libsecp256k1
 	url = https://github.com/bitcoin-core/secp256k1
+[submodule "deps/fnc12-sqlite_orm"]
+	path = deps/fnc12-sqlite_orm
+	url = https://github.com/fnc12/sqlite_orm

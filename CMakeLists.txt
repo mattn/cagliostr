@@ -42,5 +42,6 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/buil
 
 target_link_libraries(cagliostr crypto)
 target_link_libraries(cagliostr ssl)
+target_link_libraries(cagliostr sqlite3)
 target_link_libraries(cagliostr ${LIBUV_LIBRARIES})
 target_link_libraries(cagliostr ${LIBSECP256K1_LIBRARIES})
