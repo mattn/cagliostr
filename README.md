@@ -11,6 +11,7 @@ $ ./cagliostr
 ## Requirements
 
 * OpenSSL
+* libsqlite3
 
 ## Installation
 
