@@ -127,17 +127,16 @@ static bool send_records(ws28::Client *client, std::string &sub,
       sql += " AND " + make_in_query("kinds", filter.kinds);
     }
     if (!filter.tags.empty()) {
-      std::string condition = "(";
+      std::string condition;
       for (const auto tag : filter.tags) {
         nlohmann::json data = tag;
         auto s = data.dump();
         if (!condition.empty()) {
           condition += " OR ";
         }
-        condition += "tags LIKE %" + s + "%";
+        condition += "tags LIKE '%" + s + "%'";
       }
-      condition += ")";
-      sql += " AND " + condition;
+      sql += " AND (" + condition + ")";
     }
     if (filter.since != 0) {
       std::ostringstream os;
@@ -152,7 +151,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
   }
 
   sqlite3_stmt *stmt = nullptr;
-  // std::cout << sql << std::endl;
+  std::cout << sql << std::endl;
   auto ret = sqlite3_prepare(conn, sql.data(), sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
