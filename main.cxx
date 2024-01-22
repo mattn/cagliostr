@@ -1,4 +1,3 @@
-#include <Server.h>
 #include <algorithm>
 #include <cctype>
 #include <exception>
@@ -13,6 +12,8 @@
 
 #include <secp256k1.h>
 #include <secp256k1_schnorrsig.h>
+
+#include <Server.h>
 
 typedef struct {
   std::string id;
