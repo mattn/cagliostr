@@ -501,7 +501,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   server.SetClientDataCallback(data_callback);
   server.SetClientDisconnectedCallback(close_callback);
   server.SetHTTPCallback(http_request_callback);
-  server.Listen(7447);
+  server.Listen(7448);
 
   uv_signal_t sig;
   uv_signal_init(loop, &sig);
