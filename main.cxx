@@ -256,15 +256,20 @@ static void make_filter(filter_t &filter, nlohmann::json &data) {
 static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
   std::vector<filter_t> filters;
-  for (int i = 2; i < data.size(); i++) {
+  for (size_t i = 2; i < data.size(); i++) {
     if (!data[i].is_object()) {
       continue;
     }
     try {
       filter_t filter = {
+          .ids = {},
+          .authors = {},
+          .kinds = {},
+          .tags = {},
           .since = 0,
           .until = 0,
           .limit = 500,
+          .search = "",
       };
       make_filter(filter, data[i]);
       filters.push_back(filter);
@@ -288,15 +293,20 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
 static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
   std::vector<filter_t> filters;
-  for (int i = 2; i < data.size(); i++) {
+  for (size_t i = 2; i < data.size(); i++) {
     if (!data[i].is_object()) {
       continue;
     }
     try {
       filter_t filter = {
+          .ids = {},
+          .authors = {},
+          .kinds = {},
+          .tags = {},
           .since = 0,
           .until = 0,
           .limit = 500,
+          .search = "",
       };
       make_filter(filter, data[i]);
       filters.push_back(filter);
