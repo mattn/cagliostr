@@ -39,6 +39,7 @@ typedef struct filter_t {
   std::vector<std::vector<std::string>> tags;
   std::time_t since;
   std::time_t until;
+  std::string search;
 } filter_t;
 
 typedef struct subscriber_t {
@@ -151,6 +152,12 @@ static bool send_records(ws28::Client *client, std::string &sub,
       os << filter.until;
       sql += " AND created_at <= " + os.str();
     }
+    if (!filter.search.empty()) {
+      nlohmann::json data = filter.search;
+      auto s = data.dump();
+      s = s.substr(1, s.size() - 2);
+      sql += " AND content LIKE '%" + s + "%'";
+    }
   }
 
   sqlite3_stmt *stmt = nullptr;
@@ -225,6 +232,9 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
       }
       if (data[i].count("until") > 0) {
         filter.until = data[i]["until"];
+      }
+      if (data[i].count("search") > 0) {
+        filter.search = data[i]["search"];
       }
       filters.push_back(filter);
     } catch (std::exception &e) {
