@@ -10,4 +10,5 @@ FROM debian:bookworm AS build-run
 RUN apt update && apt install -y libsqlite3-0 libssl3
 COPY --link --from=build-dev /usr/src/app/build/cagliostr /usr/bin/cagliostr
 COPY --from=build-dev /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+RUN mkdir /data
 CMD ["/usr/bin/cagliostr"]
