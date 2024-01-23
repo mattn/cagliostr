@@ -404,6 +404,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
 
 static void http_request_callback(ws28::HTTPRequest &req,
                                   ws28::HTTPResponse &resp) {
+  resp.header("Access-Control-Allow-Origin", "*");
   if (req.method == "GET" && req.path == "/") {
     resp.status(200);
     resp.header("content-type", "text/html; charset=UTF-8");
