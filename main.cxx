@@ -232,7 +232,9 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     }
   }
   if (filters.empty()) {
-    relay_final(client, sub, "error: invalid filter");
+    auto reply =
+        nlohmann::json::array({"NOTICE", sub, "error: invalid filter"});
+    relay_send(client, reply);
     return;
   }
   subscribers[sub] = {.client = client, .filters = filters};
