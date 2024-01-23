@@ -207,7 +207,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     }
     if (data[i].count("kinds") > 0) {
       for (const auto &kind : data[i]["kinds"]) {
-        filter.authors.push_back(kind);
+        filter.kinds.push_back(kind);
       }
     }
     for (nlohmann::json::iterator it = data[i].begin(); it != data[i].end();
