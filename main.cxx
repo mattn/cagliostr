@@ -245,13 +245,9 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
 
 static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
-
-  nlohmann::json reply = {"CLOSED", sub, "OK"};
-  relay_send(client, reply);
   for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
     if (it->sub == sub) {
       subscribers.erase(it);
-      break;
     }
   }
 }
