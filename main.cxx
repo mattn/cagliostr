@@ -80,6 +80,7 @@ static void relay_final(ws28::Client *client, const std::string &id,
   nlohmann::json data = {"CLOSED", id, msg};
   relay_send(client, data);
   client->Close(0);
+  client->Destroy();
 }
 
 static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
@@ -514,7 +515,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
     return;
   }
 
-  client->Close(0);
+  relay_final(client, "", "error: invalid request");
 }
 
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
