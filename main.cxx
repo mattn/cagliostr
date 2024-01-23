@@ -81,8 +81,6 @@ static void relay_final(ws28::Client *client, const std::string &id,
   std::cout << "FINAL" << std::endl;
   nlohmann::json data = {"CLOSED", id, msg};
   relay_send(client, data);
-  //client->Close(0);
-  //client->Destroy();
 }
 
 static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
@@ -320,6 +318,7 @@ static bool insert_record(event_t &ev) {
     VALUES ($1, $2, $3, $4, $5, $6, $7)
   )";
   sqlite3_stmt *stmt = nullptr;
+  std::cout << sql << std::endl;
   auto ret = sqlite3_prepare(conn, sql, strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
@@ -522,16 +521,6 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   relay_final(client, "", "error: invalid request");
 }
 
-static void signal_handler(uv_signal_t *req, int /*signum*/) {
-  uv_signal_stop(req);
-  std::cerr << "!! SIGINT" << std::endl;
-  for (const auto& s : subscribers) {
-    relay_final(s.client, s.sub, "shutdown...");
-  }
-
-  uv_stop(loop);
-}
-
 static void storage_init() {
   const char *dsn = getenv("DATABASE_URL");
   if (dsn == nullptr) {
@@ -565,17 +554,27 @@ static void storage_init() {
   }
 }
 
+static void signal_handler(uv_signal_t *req, int /*signum*/) {
+  uv_signal_stop(req);
+  std::cerr << "!! SIGINT" << std::endl;
+  for (const auto &s : subscribers) {
+    relay_final(s.client, s.sub, "shutdown...");
+  }
+  uv_stop(loop);
+}
+
 int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   storage_init();
 
-  uv_loop_t *loop = uv_default_loop();
-  ws28::Server server{loop, nullptr};
+  loop = uv_default_loop();
+  auto server = ws28::Server{loop, nullptr};
   server.SetClientDataCallback(data_callback);
   server.SetClientConnectedCallback(connect_callback);
   server.SetClientDisconnectedCallback(close_callback);
   server.SetCheckTCPConnectionCallback(tcpcheck_callback);
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
+  server.StopListening();
   server.Listen(7447);
 
   uv_signal_t sig;
