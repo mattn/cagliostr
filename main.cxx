@@ -4,6 +4,8 @@
 #include <sstream>
 #include <string>
 
+#include <sqlite3.h>
+
 #include <libbech32/bech32.h>
 #include <nlohmann/json.hpp>
 #include <openssl/evp.h>
@@ -11,10 +13,11 @@
 #include <secp256k1.h>
 #include <secp256k1_schnorrsig.h>
 
-#include <sqlite3.h>
+#include <spdlog/spdlog.h>
+
+#include <Server.h>
 
 #include "version.h"
-#include <Server.h>
 
 typedef struct event_t {
   std::string id;
@@ -69,13 +72,13 @@ static std::vector<uint8_t> hex2bytes(const std::string &hex) {
 
 static void relay_send(ws28::Client *client, nlohmann::json &data) {
   auto s = data.dump();
-  std::cout << "<< " << s << std::endl;
+  spdlog::debug("<< {}", s);
   client->Send(s.data(), s.size(), 1);
 }
 
 static void relay_final(ws28::Client *client, const std::string &id,
                         const std::string &msg) {
-  std::cout << "FINAL" << std::endl;
+  spdlog::debug("FINAL");
   nlohmann::json data = {"CLOSED", id, msg};
   relay_send(client, data);
 }
@@ -171,7 +174,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
   sql += " ORDER BY created_at DESC LIMIT ?";
 
   sqlite3_stmt *stmt = nullptr;
-  std::cout << sql << std::endl;
+  spdlog::debug("{}", sql);
   auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
@@ -204,11 +207,11 @@ static bool send_records(ws28::Client *client, std::string &sub,
       ej["tags"] = nlohmann::json::parse(j);
       ej["content"] = (char *)sqlite3_column_text(stmt, 5);
       ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
-      sqlite3_finalize(stmt);
 
       nlohmann::json reply = {"EVENT", sub, ej};
       relay_send(client, reply);
     }
+    sqlite3_finalize(stmt);
   }
 
   return true;
@@ -274,7 +277,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
       make_filter(filter, data[i]);
       filters.push_back(filter);
     } catch (std::exception &e) {
-      std::cerr << "!! " << e.what() << std::endl;
+      spdlog::warn("!! {}", e.what());
     }
   }
   if (filters.empty()) {
@@ -283,7 +286,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     relay_send(client, reply);
     return;
   }
-  subscribers.emplace_back();
+  subscribers.push_back({.sub = sub, .client = client, .filters = filters});
 
   send_records(client, sub, filters);
   auto reply = nlohmann::json::array({"EOSE", sub});
@@ -311,7 +314,7 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
       make_filter(filter, data[i]);
       filters.push_back(filter);
     } catch (std::exception &e) {
-      std::cerr << "!! " << e.what() << std::endl;
+      spdlog::warn("!! {}", e.what());
     }
   }
   if (filters.empty()) {
@@ -320,7 +323,6 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
     relay_send(client, reply);
     return;
   }
-  subscribers.emplace_back();
 
   send_records(client, sub, filters, true);
 }
@@ -400,7 +402,7 @@ static bool insert_record(event_t &ev) {
     VALUES ($1, $2, $3, $4, $5, $6, $7)
   )";
   sqlite3_stmt *stmt = nullptr;
-  std::cout << sql << std::endl;
+  spdlog::debug("{}", sql);
   auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
@@ -478,7 +480,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
     nlohmann::json reply = {"OK", ev.id, true};
     relay_send(client, reply);
   } catch (std::exception &e) {
-    std::cerr << "!! " << e.what() << std::endl;
+    spdlog::warn("!! {}", e.what());
   }
 }
 
@@ -549,16 +551,16 @@ static void http_request_callback(ws28::HTTPRequest &req,
 
 static void connect_callback(ws28::Client * /*client*/,
                              ws28::HTTPRequest &req) {
-  std::cout << "CONNECTED " << req.ip << std::endl;
+  spdlog::debug("CONNECTED {}", req.ip);
 }
 
 static bool tcpcheck_callback(std::string_view ip, bool secure) {
-  std::cout << "TCPCHECK " << ip << " " << secure << std::endl;
+  spdlog::debug("TCPCHECK {} {}", ip, secure);
   return true;
 }
 
 static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
-  std::cout << "CHECK " << req.ip << std::endl;
+  spdlog::debug("CHECK {}", req.ip);
   return true;
 }
 
@@ -575,7 +577,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
                           int /*opcode*/) {
   std::string s;
   s.append(data, len);
-  std::cout << ">> " << s << std::endl;
+  spdlog::debug(">> {}", s);
   auto payload = nlohmann::json::parse(s);
 
   if (!payload.is_array() || payload.size() < 2) {
@@ -652,7 +654,7 @@ static void storage_init() {
 
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
   uv_signal_stop(req);
-  std::cerr << "!! SIGINT" << std::endl;
+  spdlog::warn("!! SIGINT");
   for (const auto &s : subscribers) {
     relay_final(s.client, s.sub, "shutdown...");
   }
@@ -672,6 +674,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   server.SetHTTPCallback(http_request_callback);
   server.StopListening();
   server.Listen(7447);
+  spdlog::info("server started :7447");
 
   uv_signal_t sig;
   uv_signal_init(loop, &sig);

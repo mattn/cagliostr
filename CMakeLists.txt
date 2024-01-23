@@ -19,6 +19,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/deps/nlohmann-json/include
     ${PROJECT_SOURCE_DIR}/deps/libuv-libuv/include
     ${PROJECT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/include
+    ${PROJECT_SOURCE_DIR}/deps/gabime-spdlog/include
     )
 
 add_executable(cagliostr main.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
@@ -45,8 +46,20 @@ add_custom_command(
 add_dependencies(cagliostr libsecp256k1)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src)
 
+set(LIBSPDLOG_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/libspdlog.a)
+add_custom_target(libspdlog DEPENDS ${LIBSPDLOG_LIBRARIES})
+add_custom_command(
+    OUTPUT ${LIBSPDLOG_LIBRARIES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog
+    COMMAND sh
+    ARGS -c 'cmake -B build  -DBUILD_SHARED_LIBS=off && cmake --build build -t spdlog'
+    )
+add_dependencies(cagliostr libspdlog)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build)
+
 target_link_libraries(cagliostr crypto)
 target_link_libraries(cagliostr ssl)
 target_link_libraries(cagliostr sqlite3)
 target_link_libraries(cagliostr ${LIBUV_LIBRARIES})
 target_link_libraries(cagliostr ${LIBSECP256K1_LIBRARIES})
+target_link_libraries(cagliostr ${LIBSPDLOG_LIBRARIES})

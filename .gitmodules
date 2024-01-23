@@ -16,3 +16,6 @@
 [submodule "deps/fnc12-sqlite_orm"]
 	path = deps/fnc12-sqlite_orm
 	url = https://github.com/fnc12/sqlite_orm
+[submodule "deps/gabime-spdlog"]
+	path = deps/gabime-spdlog
+	url = https://github.com/gabime/spdlog

@@ -9,3 +9,5 @@ deps/nlohmann-json/include
 deps/bitcoin-core-libsecp256k1/include
 -I
 deps/libuv-libuv/include
+-I
+deps/gabime-spdlog/include
