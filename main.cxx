@@ -49,6 +49,7 @@ typedef struct subscriber_t {
 // global variables
 std::vector<subscriber_t> subscribers;
 sqlite3 *conn = nullptr;
+uv_loop_t *loop = nullptr;
 
 static std::string digest2hex(const uint8_t *data) {
   std::stringstream ss;
@@ -528,7 +529,7 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
     relay_final(s.client, s.sub, "shutdown...");
   }
 
-  uv_stop(uv_default_loop());
+  uv_stop(loop);
 }
 
 static void storage_init() {
@@ -580,6 +581,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   uv_signal_t sig;
   uv_signal_init(loop, &sig);
   uv_signal_start(&sig, signal_handler, SIGINT);
-  uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+  uv_run(loop, UV_RUN_DEFAULT);
   return 0;
 }
