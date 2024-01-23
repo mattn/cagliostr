@@ -154,7 +154,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
       os << filter.until;
       sql += " AND created_at <= " + os.str();
     }
-    if (filter.limit != 0 && filter.limit < limit) {
+    if (filter.limit > 0 && filter.limit < limit) {
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
