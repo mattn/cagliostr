@@ -16,12 +16,6 @@
 #include "version.h"
 #include <Server.h>
 
-class tags_t {
-public:
-  std::vector<std::vector<std::string>> values;
-  void print() {}
-};
-
 typedef struct event_t {
   std::string id;
   std::string pubkey;
@@ -107,7 +101,7 @@ static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
   return result;
 }
 
-std::string make_in_query(const std::string name, const nlohmann::json &data) {
+std::string make_in_query(const std::string &name, const nlohmann::json &data) {
   auto s = data.dump();
   s = s.substr(1, s.size() - 2);
   return " " + name + " in (" + s + ")";
@@ -178,7 +172,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
 
   sqlite3_stmt *stmt = nullptr;
   std::cout << sql << std::endl;
-  auto ret = sqlite3_prepare(conn, sql.data(), sql.size(), &stmt, nullptr);
+  auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
     return false;
@@ -284,7 +278,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     relay_send(client, reply);
     return;
   }
-  subscribers.push_back({.client = client, .filters = filters});
+  subscribers.emplace_back();
 
   send_records(client, sub, filters);
   auto reply = nlohmann::json::array({"EOSE", sub});
@@ -316,12 +310,12 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
     relay_send(client, reply);
     return;
   }
-  subscribers.push_back({.client = client, .filters = filters});
+  subscribers.emplace_back();
 
   send_records(client, sub, filters, true);
 }
 
-static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
+static void do_relay_close(ws28::Client * /*client*/, nlohmann::json &data) {
   std::string sub = data[1];
   for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
     if (it->sub == sub) {
@@ -397,20 +391,21 @@ static bool insert_record(event_t &ev) {
   )";
   sqlite3_stmt *stmt = nullptr;
   std::cout << sql << std::endl;
-  auto ret = sqlite3_prepare(conn, sql, strlen(sql), &stmt, nullptr);
+  auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
     return false;
   }
   nlohmann::json tags = ev.tags;
   auto s = tags.dump();
-  sqlite3_bind_text(stmt, 1, ev.id.data(), ev.id.size(), nullptr);
-  sqlite3_bind_text(stmt, 2, ev.pubkey.data(), ev.pubkey.size(), nullptr);
-  sqlite3_bind_int(stmt, 3, ev.created_at);
+  sqlite3_bind_text(stmt, 1, ev.id.data(), (int)ev.id.size(), nullptr);
+  sqlite3_bind_text(stmt, 2, ev.pubkey.data(), (int)ev.pubkey.size(), nullptr);
+  sqlite3_bind_int(stmt, 3, (int)ev.created_at);
   sqlite3_bind_int(stmt, 4, ev.kind);
-  sqlite3_bind_text(stmt, 5, s.data(), s.size(), nullptr);
-  sqlite3_bind_text(stmt, 6, ev.content.data(), ev.content.size(), nullptr);
-  sqlite3_bind_text(stmt, 7, ev.sig.data(), ev.sig.size(), nullptr);
+  sqlite3_bind_text(stmt, 5, s.data(), (int)s.size(), nullptr);
+  sqlite3_bind_text(stmt, 6, ev.content.data(), (int)ev.content.size(),
+                    nullptr);
+  sqlite3_bind_text(stmt, 7, ev.sig.data(), (int)ev.sig.size(), nullptr);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
@@ -542,7 +537,8 @@ static void http_request_callback(ws28::HTTPRequest &req,
   }
 }
 
-static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
+static void connect_callback(ws28::Client * /*client*/,
+                             ws28::HTTPRequest &req) {
   std::cout << "CONNECTED " << req.ip << std::endl;
 }
 
@@ -551,7 +547,7 @@ static bool tcpcheck_callback(std::string_view ip, bool secure) {
   return true;
 }
 
-static bool check_callback(ws28::Client *client, ws28::HTTPRequest &req) {
+static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
   std::cout << "CHECK " << req.ip << std::endl;
   return true;
 }
