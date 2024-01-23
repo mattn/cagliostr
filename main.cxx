@@ -132,7 +132,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
     }
     if (!filter.tags.empty()) {
       std::string condition;
-      for (const auto tag : filter.tags) {
+      for (const auto &tag : filter.tags) {
         nlohmann::json data = tag;
         auto s = data.dump();
         if (!condition.empty()) {
@@ -525,7 +525,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
   uv_signal_stop(req);
   std::cerr << "!! SIGINT" << std::endl;
-  for (const auto s : subscribers) {
+  for (const auto& s : subscribers) {
     relay_final(s.client, s.sub, "shutdown...");
   }
 
