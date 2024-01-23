@@ -405,10 +405,61 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
 static void http_request_callback(ws28::HTTPRequest &req,
                                   ws28::HTTPResponse &resp) {
   resp.header("Access-Control-Allow-Origin", "*");
-  if (req.method == "GET" && req.path == "/") {
-    resp.status(200);
-    resp.header("content-type", "text/html; charset=UTF-8");
-    resp.send("cagliostr\n");
+  if (req.method == "GET") {
+    auto accept = req.headers.Get("accept");
+    if (accept.has_value() && accept.value() == "application/nostr+json") {
+      resp.status(200);
+      resp.header("content-type", "application/json; charset=UTF-8");
+      resp.send(R"(
+{
+  "name": "cagliostr",
+  "description": "nostr relay written in C++",
+  "pubkey": "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc",
+  "contact": "mattn.jp@gmail.com",
+  "supported_nips": [
+    1,
+    2,
+    4,
+    9,
+    11,
+    12,
+    15,
+    16,
+    20,
+    22,
+    33,
+    42,
+    45,
+    50
+  ],
+  "software": "https://github.com/mattn/cagliostr",
+  "version": "0.0.12",
+  "limitation": {
+    "max_message_length": 524288,
+    "max_subscriptions": 20,
+    "max_filters": 10,
+    "max_limit": 500,
+    "max_subid_length": 100,
+    "max_event_tags": 100,
+    "max_content_length": 16384,
+    "min_pow_difficulty": 30,
+    "auth_required": false,
+    "payment_required": false,
+    "restricted_writes": false
+  },
+  "fees": {},
+  "icon": "https://mattn.github.io/assets/image/mattn-mohawk.webp"
+}
+      )");
+    } else if (req.path == "/") {
+      resp.status(200);
+      resp.header("content-type", "text/html; charset=UTF-8");
+      resp.send("Cagliostr\n");
+    } else {
+      resp.status(404);
+      resp.header("content-type", "text/html; charset=UTF-8");
+      resp.send("Not Found\n");
+    }
   }
 }
 
@@ -416,7 +467,7 @@ static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   std::cout << "CONNECTED " << req.ip << std::endl;
 }
 
-static bool check_callback(ws28::Client *client, ws28::HTTPRequest& req) {
+static bool check_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   std::cout << "CHECK " << req.ip << std::endl;
   return true;
 }
