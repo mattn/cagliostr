@@ -13,6 +13,7 @@
 
 #include <sqlite3.h>
 
+#include "version.h"
 #include <Server.h>
 
 class tags_t {
@@ -401,13 +402,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
 
 static void http_request_callback(ws28::HTTPRequest &req,
                                   ws28::HTTPResponse &resp) {
-  resp.header("Access-Control-Allow-Origin", "*");
-  if (req.method == "GET") {
-    auto accept = req.headers.Get("accept");
-    if (accept.has_value() && accept.value() == "application/nostr+json") {
-      resp.status(200);
-      resp.header("content-type", "application/json; charset=UTF-8");
-      resp.send(R"(
+  const static auto nip11 = R"(
 {
   "name": "cagliostr",
   "description": "nostr relay written in C++",
@@ -430,7 +425,7 @@ static void http_request_callback(ws28::HTTPRequest &req,
     50
   ],
   "software": "https://github.com/mattn/cagliostr",
-  "version": "0.0.12",
+  "version": "develop",
   "limitation": {
     "max_message_length": 524288,
     "max_subscriptions": 20,
@@ -447,7 +442,17 @@ static void http_request_callback(ws28::HTTPRequest &req,
   "fees": {},
   "icon": "https://mattn.github.io/assets/image/mattn-mohawk.webp"
 }
-      )");
+      )";
+
+  resp.header("Access-Control-Allow-Origin", "*");
+  if (req.method == "GET") {
+    auto accept = req.headers.Get("accept");
+    if (accept.has_value() && accept.value() == "application/nostr+json") {
+      resp.status(200);
+      resp.header("content-type", "application/json; charset=UTF-8");
+      auto data = nlohmann::json::parse(nip11);
+      data["version"] = VERSION;
+      resp.send(data.dump());
     } else if (req.path == "/") {
       resp.status(200);
       resp.header("content-type", "text/html; charset=UTF-8");

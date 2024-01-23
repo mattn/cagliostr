@@ -13,6 +13,10 @@ jobs:
     - name: Check out the repo
       uses: actions/checkout@v3
 
+    - name: Update global.js
+      run: |
+        sed -i.bak -e "s/develop/$(git describe --tags --abbrev=0 | sed 's!^v!!')/" version.h
+
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v1
 
