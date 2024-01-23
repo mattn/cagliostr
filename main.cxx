@@ -125,7 +125,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
       sql += " AND " + make_in_query("pubkey", filter.authors);
     }
     if (!filter.kinds.empty()) {
-      sql += " AND " + make_in_query("kinds", filter.kinds);
+      sql += " AND " + make_in_query("kind", filter.kinds);
     }
     if (!filter.tags.empty()) {
       std::string condition;
