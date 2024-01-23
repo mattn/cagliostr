@@ -77,6 +77,7 @@ static void relay_send(ws28::Client *client, nlohmann::json &data) {
 
 static void relay_final(ws28::Client *client, const std::string &id,
                         const std::string &msg) {
+  std::cout << "FINAL" << std::endl;
   nlohmann::json data = {"CLOSED", id, msg};
   relay_send(client, data);
   client->Close(0);
@@ -463,6 +464,11 @@ static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   std::cout << "CONNECTED " << req.ip << std::endl;
 }
 
+static bool tcpcheck_callback(std::string_view ip, bool secure) {
+  std::cout << "TCPCHECK " << ip << " " << secure << std::endl;
+  return true;
+}
+
 static bool check_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   std::cout << "CHECK " << req.ip << std::endl;
   return true;
@@ -566,6 +572,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   server.SetClientDataCallback(data_callback);
   server.SetClientConnectedCallback(connect_callback);
   server.SetClientDisconnectedCallback(close_callback);
+  server.SetCheckTCPConnectionCallback(tcpcheck_callback);
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(7447);
