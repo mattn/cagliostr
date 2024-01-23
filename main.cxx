@@ -416,8 +416,8 @@ static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   std::cout << "CONNECTED " << req.ip << std::endl;
 }
 
-static bool check_callback(std::string_view ip, bool secure) {
-  std::cout << "CHECK " << ip << " " << secure << std::endl;
+static bool check_callback(ws28::Client *client, ws28::HTTPRequest& req) {
+  std::cout << "CHECK " << req.ip << std::endl;
   return true;
 }
 
@@ -519,7 +519,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   server.SetClientDataCallback(data_callback);
   server.SetClientConnectedCallback(connect_callback);
   server.SetClientDisconnectedCallback(close_callback);
-  server.SetCheckTCPConnectionCallback(check_callback);
+  server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(7447);
 
