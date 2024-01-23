@@ -81,8 +81,8 @@ static void relay_final(ws28::Client *client, const std::string &id,
   std::cout << "FINAL" << std::endl;
   nlohmann::json data = {"CLOSED", id, msg};
   relay_send(client, data);
-  client->Close(0);
-  client->Destroy();
+  //client->Close(0);
+  //client->Destroy();
 }
 
 static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
