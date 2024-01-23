@@ -247,8 +247,6 @@ static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
 
   nlohmann::json reply = {"CLOSED", sub, "OK"};
   relay_send(client, reply);
-  client->Close(0);
-  client->Destroy();
   for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
     if (it->sub == sub) {
       subscribers.erase(it);
