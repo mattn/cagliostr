@@ -73,7 +73,7 @@ static std::vector<uint8_t> hex2bytes(const std::string &hex) {
 static void relay_send(ws28::Client *client, nlohmann::json &data) {
   auto s = data.dump();
   std::cout << "<< " << s << std::endl;
-  client->Send(s.data(), s.size());
+  client->Send(s.data(), s.size(), 1);
 }
 
 static void relay_final(ws28::Client *client, const std::string &id,
