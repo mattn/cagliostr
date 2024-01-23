@@ -47,7 +47,7 @@ typedef struct subscriber_t {
 
 // global variables
 std::map<std::string, subscriber_t> subscribers;
-sqlite3 *conn = NULL;
+sqlite3 *conn = nullptr;
 
 static std::string digest2hex(const uint8_t *data) {
   std::stringstream ss;
@@ -102,10 +102,10 @@ static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
   return result;
 }
 
-std::string make_in_query(const std::string name, const nlohmann::json& data) {
+std::string make_in_query(const std::string name, const nlohmann::json &data) {
   auto s = data.dump();
-  s = s.substr(1, s.size()-2);
-  return " " + name + " in (" + s+ ")";
+  s = s.substr(1, s.size() - 2);
+  return " " + name + " in (" + s + ")";
 }
 
 static bool send_records(ws28::Client *client, std::string &sub,
@@ -461,7 +461,11 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
 }
 
 static void storage_init() {
-  auto ret = sqlite3_open("./cagliostr.sqlite", &conn);
+  const char *dsn = getenv("DATABASE_URL");
+  if (dsn == nullptr) {
+    dsn = "./cagliostr.sqlite";
+  }
+  auto ret = sqlite3_open(dsn, &conn);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
     exit(-1);
