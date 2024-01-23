@@ -39,6 +39,7 @@ typedef struct filter_t {
   std::vector<std::vector<std::string>> tags;
   std::time_t since;
   std::time_t until;
+  int limit;
   std::string search;
 } filter_t;
 
@@ -120,6 +121,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
     FROM event WHERE 1 = 1
   )";
 
+  auto limit = 500;
   for (const auto &filter : filters) {
     if (!filter.ids.empty()) {
       sql += " AND " + make_in_query("id", filter.ids);
@@ -152,6 +154,9 @@ static bool send_records(ws28::Client *client, std::string &sub,
       os << filter.until;
       sql += " AND created_at <= " + os.str();
     }
+    if (filter.limit != 0 && filter.limit < limit) {
+      limit = filter.limit;
+    }
     if (!filter.search.empty()) {
       nlohmann::json data = filter.search;
       auto s = data.dump();
@@ -159,6 +164,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
       sql += " AND content LIKE '%" + s + "%'";
     }
   }
+  sql += " ORDER BY created_at DESC LIMIT ?";
 
   sqlite3_stmt *stmt = nullptr;
   std::cout << sql << std::endl;
@@ -167,6 +173,7 @@ static bool send_records(ws28::Client *client, std::string &sub,
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
     return false;
   }
+  sqlite3_bind_int(stmt, 1, limit);
   while (true) {
     ret = sqlite3_step(stmt);
     if (ret == SQLITE_DONE) {
@@ -201,6 +208,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
       filter_t filter = {
           .since = 0,
           .until = 0,
+          .limit = 500,
       };
       if (data[i].count("ids") > 0) {
         for (const auto &id : data[i]["ids"]) {
@@ -232,6 +240,9 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
       }
       if (data[i].count("until") > 0) {
         filter.until = data[i]["until"];
+      }
+      if (data[i].count("limit") > 0) {
+        filter.limit = data[i]["limit"];
       }
       if (data[i].count("search") > 0) {
         filter.search = data[i]["search"];
