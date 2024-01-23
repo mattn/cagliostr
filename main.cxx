@@ -183,7 +183,6 @@ static bool send_records(ws28::Client *client, std::string &sub,
 static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
   if (subscribers.count(sub) != 0) {
-    relay_final(client, sub, "error: duplicate subscriber");
     return;
   }
   std::vector<filter_t> filters;
