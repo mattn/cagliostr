@@ -191,42 +191,50 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     if (!data[i].is_object()) {
       continue;
     }
-    filter_t filter = {
-        .since = 0,
-        .until = 0,
-    };
-    if (data[i].count("ids") > 0) {
-      for (const auto &id : data[i]["ids"]) {
-        filter.ids.push_back(id);
-      }
-    }
-    if (data[i].count("authors") > 0) {
-      for (const auto &author : data[i]["authors"]) {
-        filter.authors.push_back(author);
-      }
-    }
-    if (data[i].count("kinds") > 0) {
-      for (const auto &kind : data[i]["kinds"]) {
-        filter.kinds.push_back(kind);
-      }
-    }
-    for (nlohmann::json::iterator it = data[i].begin(); it != data[i].end();
-         ++it) {
-      if (it.key().at(0) == '#' && it.value().is_array()) {
-        std::vector<std::string> tag = {it.key().c_str() + 1};
-        for (const auto &v : it.value()) {
-          tag.push_back(v);
+    try {
+      filter_t filter = {
+          .since = 0,
+          .until = 0,
+      };
+      if (data[i].count("ids") > 0) {
+        for (const auto &id : data[i]["ids"]) {
+          filter.ids.push_back(id);
         }
-        filter.tags.push_back(tag);
       }
+      if (data[i].count("authors") > 0) {
+        for (const auto &author : data[i]["authors"]) {
+          filter.authors.push_back(author);
+        }
+      }
+      if (data[i].count("kinds") > 0) {
+        for (const auto &kind : data[i]["kinds"]) {
+          filter.kinds.push_back(kind);
+        }
+      }
+      for (nlohmann::json::iterator it = data[i].begin(); it != data[i].end();
+           ++it) {
+        if (it.key().at(0) == '#' && it.value().is_array()) {
+          std::vector<std::string> tag = {it.key().c_str() + 1};
+          for (const auto &v : it.value()) {
+            tag.push_back(v);
+          }
+          filter.tags.push_back(tag);
+        }
+      }
+      if (data[i].count("since") > 0) {
+        filter.since = data[i]["since"];
+      }
+      if (data[i].count("until") > 0) {
+        filter.until = data[i]["until"];
+      }
+      filters.push_back(filter);
+    } catch (std::exception &e) {
+      std::cerr << "!! " << e.what() << std::endl;
     }
-    if (data[i].count("since") > 0) {
-      filter.since = data[i]["since"];
-    }
-    if (data[i].count("until") > 0) {
-      filter.until = data[i]["until"];
-    }
-    filters.push_back(filter);
+  }
+  if (filters.empty()) {
+    relay_final(client, sub, "error: invalid filter");
+    return;
   }
   subscribers[sub] = {.client = client, .filters = filters};
 
