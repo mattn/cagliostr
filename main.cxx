@@ -41,12 +41,13 @@ typedef struct filter_t {
 } filter_t;
 
 typedef struct subscriber_t {
+  std::string sub;
   ws28::Client *client{};
   std::vector<filter_t> filters;
 } subscriber_t;
 
 // global variables
-std::map<std::string, subscriber_t> subscribers;
+std::vector<subscriber_t> subscribers;
 sqlite3 *conn = nullptr;
 
 static std::string digest2hex(const uint8_t *data) {
@@ -182,9 +183,6 @@ static bool send_records(ws28::Client *client, std::string &sub,
 
 static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
-  if (subscribers.count(sub) != 0) {
-    return;
-  }
   std::vector<filter_t> filters;
   for (int i = 2; i < data.size(); i++) {
     if (!data[i].is_object()) {
@@ -237,7 +235,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     relay_send(client, reply);
     return;
   }
-  subscribers[sub] = {.client = client, .filters = filters};
+  subscribers.push_back({.client = client, .filters = filters});
 
   send_records(client, sub, filters);
   auto reply = nlohmann::json::array({"EOSE", sub});
@@ -246,16 +244,17 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
 
 static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
-  if (subscribers.count(sub) == 0) {
-    relay_final(client, sub, "error: invalid request");
-    return;
-  }
-  auto ss = subscribers[sub];
+
   nlohmann::json reply = {"CLOSED", sub, "OK"};
   relay_send(client, reply);
   client->Close(0);
-  ss.client->Destroy();
-  subscribers.erase(sub);
+  client->Destroy();
+  for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
+    if (it->sub == sub) {
+      subscribers.erase(it);
+      break;
+    }
+  }
 }
 
 static bool matched_filters(const std::vector<filter_t> &filters,
@@ -389,12 +388,12 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
     }
 
     for (const auto &s : subscribers) {
-      if (id == s.first) {
+      if (s.client == client) {
         continue;
       }
-      if (matched_filters(s.second.filters, ev)) {
-        nlohmann::json reply = {"EVENT", s.first, ej};
-        relay_send(s.second.client, reply);
+      if (matched_filters(s.filters, ev)) {
+        nlohmann::json reply = {"EVENT", s.sub, ej};
+        relay_send(s.client, reply);
       }
     }
     relay_final(client, "", "OK");
@@ -412,9 +411,13 @@ static void http_request_callback(ws28::HTTPRequest &req,
   }
 }
 
+static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
+  std::cout << "CONNECTED " << req.ip << std::endl;
+}
+
 static void close_callback(ws28::Client *client) {
   for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
-    if (it->second.client == client) {
+    if (it->client == client) {
       subscribers.erase(it);
       break;
     }
@@ -462,8 +465,8 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
   uv_signal_stop(req);
   std::cerr << "!! SIGINT" << std::endl;
-  for (const auto &[key, value] : subscribers) {
-    relay_final(value.client, key, "shutdown...");
+  for (const auto s : subscribers) {
+    relay_final(s.client, s.sub, "shutdown...");
   }
 
   uv_stop(uv_default_loop());
@@ -508,6 +511,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   uv_loop_t *loop = uv_default_loop();
   ws28::Server server{loop, nullptr};
   server.SetClientDataCallback(data_callback);
+  server.SetClientConnectedCallback(connect_callback);
   server.SetClientDisconnectedCallback(close_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(7447);
