@@ -114,12 +114,22 @@ std::string make_in_query(const std::string name, const nlohmann::json &data) {
 }
 
 static bool send_records(ws28::Client *client, std::string &sub,
-                         std::vector<filter_t> &filters) {
-  std::string sql = R"(
+                         std::vector<filter_t> &filters,
+                         bool do_count = false) {
+  std::string sql;
+  if (do_count) {
+    sql = R"(
+    SELECT
+      COUNT(id)
+    FROM event WHERE 1 = 1
+    )";
+  } else {
+    sql = R"(
     SELECT
       id, pubkey, created_at, kind, tags, content, sig
     FROM event WHERE 1 = 1
-  )";
+    )";
+  }
 
   auto limit = 500;
   for (const auto &filter : filters) {
@@ -174,27 +184,79 @@ static bool send_records(ws28::Client *client, std::string &sub,
     return false;
   }
   sqlite3_bind_int(stmt, 1, limit);
-  while (true) {
+  if (do_count) {
     ret = sqlite3_step(stmt);
     if (ret == SQLITE_DONE) {
-      break;
+      fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+      return false;
     }
-    nlohmann::json ej;
-    ej["id"] = (char *)sqlite3_column_text(stmt, 0);
-    ej["pubkey"] = (char *)sqlite3_column_text(stmt, 1);
-    ej["created_at"] = sqlite3_column_int(stmt, 2);
-    ej["kind"] = sqlite3_column_int(stmt, 3);
-    const unsigned char *j = sqlite3_column_text(stmt, 4);
-    ej["tags"] = nlohmann::json::parse(j);
-    ej["content"] = (char *)sqlite3_column_text(stmt, 5);
-    ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
-
-    nlohmann::json reply = {"EVENT", sub, ej};
+    nlohmann::json cc;
+    cc["count"] = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+    nlohmann::json reply = {"COUNT", sub, cc};
     relay_send(client, reply);
+  } else {
+    while (true) {
+      ret = sqlite3_step(stmt);
+      if (ret == SQLITE_DONE) {
+        break;
+      }
+      nlohmann::json ej;
+      ej["id"] = (char *)sqlite3_column_text(stmt, 0);
+      ej["pubkey"] = (char *)sqlite3_column_text(stmt, 1);
+      ej["created_at"] = sqlite3_column_int(stmt, 2);
+      ej["kind"] = sqlite3_column_int(stmt, 3);
+      const unsigned char *j = sqlite3_column_text(stmt, 4);
+      ej["tags"] = nlohmann::json::parse(j);
+      ej["content"] = (char *)sqlite3_column_text(stmt, 5);
+      ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
+      sqlite3_finalize(stmt);
+
+      nlohmann::json reply = {"EVENT", sub, ej};
+      relay_send(client, reply);
+    }
   }
-  sqlite3_finalize(stmt);
 
   return true;
+}
+
+static void make_filter(filter_t &filter, nlohmann::json &data) {
+  if (data.count("ids") > 0) {
+    for (const auto &id : data["ids"]) {
+      filter.ids.push_back(id);
+    }
+  }
+  if (data.count("authors") > 0) {
+    for (const auto &author : data["authors"]) {
+      filter.authors.push_back(author);
+    }
+  }
+  if (data.count("kinds") > 0) {
+    for (const auto &kind : data["kinds"]) {
+      filter.kinds.push_back(kind);
+    }
+  }
+  for (nlohmann::json::iterator it = data.begin(); it != data.end(); ++it) {
+    if (it.key().at(0) == '#' && it.value().is_array()) {
+      std::vector<std::string> tag = {it.key().c_str() + 1};
+      for (const auto &v : it.value()) {
+        tag.push_back(v);
+      }
+      filter.tags.push_back(tag);
+    }
+  }
+  if (data.count("since") > 0) {
+    filter.since = data["since"];
+  }
+  if (data.count("until") > 0) {
+    filter.until = data["until"];
+  }
+  if (data.count("limit") > 0) {
+    filter.limit = data["limit"];
+  }
+  if (data.count("search") > 0) {
+    filter.search = data["search"];
+  }
 }
 
 static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
@@ -210,43 +272,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
           .until = 0,
           .limit = 500,
       };
-      if (data[i].count("ids") > 0) {
-        for (const auto &id : data[i]["ids"]) {
-          filter.ids.push_back(id);
-        }
-      }
-      if (data[i].count("authors") > 0) {
-        for (const auto &author : data[i]["authors"]) {
-          filter.authors.push_back(author);
-        }
-      }
-      if (data[i].count("kinds") > 0) {
-        for (const auto &kind : data[i]["kinds"]) {
-          filter.kinds.push_back(kind);
-        }
-      }
-      for (nlohmann::json::iterator it = data[i].begin(); it != data[i].end();
-           ++it) {
-        if (it.key().at(0) == '#' && it.value().is_array()) {
-          std::vector<std::string> tag = {it.key().c_str() + 1};
-          for (const auto &v : it.value()) {
-            tag.push_back(v);
-          }
-          filter.tags.push_back(tag);
-        }
-      }
-      if (data[i].count("since") > 0) {
-        filter.since = data[i]["since"];
-      }
-      if (data[i].count("until") > 0) {
-        filter.until = data[i]["until"];
-      }
-      if (data[i].count("limit") > 0) {
-        filter.limit = data[i]["limit"];
-      }
-      if (data[i].count("search") > 0) {
-        filter.search = data[i]["search"];
-      }
+      make_filter(filter, data[i]);
       filters.push_back(filter);
     } catch (std::exception &e) {
       std::cerr << "!! " << e.what() << std::endl;
@@ -263,6 +289,36 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
   send_records(client, sub, filters);
   auto reply = nlohmann::json::array({"EOSE", sub});
   relay_send(client, reply);
+}
+
+static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
+  std::string sub = data[1];
+  std::vector<filter_t> filters;
+  for (int i = 2; i < data.size(); i++) {
+    if (!data[i].is_object()) {
+      continue;
+    }
+    try {
+      filter_t filter = {
+          .since = 0,
+          .until = 0,
+          .limit = 500,
+      };
+      make_filter(filter, data[i]);
+      filters.push_back(filter);
+    } catch (std::exception &e) {
+      std::cerr << "!! " << e.what() << std::endl;
+    }
+  }
+  if (filters.empty()) {
+    auto reply =
+        nlohmann::json::array({"NOTICE", sub, "error: invalid filter"});
+    relay_send(client, reply);
+    return;
+  }
+  subscribers.push_back({.client = client, .filters = filters});
+
+  send_records(client, sub, filters, true);
 }
 
 static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
@@ -533,6 +589,14 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
       return;
     }
     do_relay_req(client, payload);
+    return;
+  }
+  if (method == "COUNT") {
+    if (payload.size() < 3) {
+      relay_final(client, "", "error: invalid request");
+      return;
+    }
+    do_relay_count(client, payload);
     return;
   }
   if (method == "CLOSE") {
