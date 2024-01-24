@@ -111,7 +111,7 @@ bool send_records(ws28::Client *client, std::string &sub,
     return false;
   }
 
-  for (auto i = 0; i < strs.size(); i++) {
+  for (size_t i = 0; i < strs.size(); i++) {
     sqlite3_bind_text(stmt, i + 1, strs.at(i).data(), (int)strs.at(i).size(),
                       nullptr);
   }
