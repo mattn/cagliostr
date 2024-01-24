@@ -1,12 +1,5 @@
 #include "cagliostr.hxx"
 
-static std::string make_in_query(const std::string &name,
-                                 const nlohmann::json &data) {
-  auto s = data.dump();
-  s = s.substr(1, s.size() - 2);
-  return " " + name + " in (" + s + ")";
-}
-
 bool insert_record(event_t &ev) {
   const auto sql = R"(
     INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig)
@@ -85,7 +78,6 @@ bool send_records(ws28::Client *client, std::string &sub,
       sql += " AND pubkey in (" + condition + ")";
     }
     if (!filter.kinds.empty()) {
-      sql += " AND " + make_in_query("kind", filter.kinds);
       std::string condition;
       for (const auto &kind : filter.kinds) {
         condition += "?,";
