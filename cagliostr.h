@@ -17,6 +17,7 @@
 #include <secp256k1_schnorrsig.h>
 
 #include <spdlog/spdlog.h>
+#include <spdlog/cfg/env.h>
 
 #include <Server.h>
 

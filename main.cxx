@@ -428,6 +428,8 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
 }
 
 static void storage_init() {
+  spdlog::debug("initialize storage");
+
   const char *dsn = getenv("DATABASE_URL");
   if (dsn == nullptr) {
     dsn = "./cagliostr.sqlite";
@@ -453,6 +455,7 @@ static void storage_init() {
 	CREATE INDEX IF NOT EXISTS kindidx ON event(kind);
 	CREATE INDEX IF NOT EXISTS kindtimeidx ON event(kind,created_at DESC);
   )";
+  spdlog::debug("{}", sql);
   ret = sqlite3_exec(conn, sql, nullptr, nullptr, nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
@@ -470,6 +473,8 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
+  spdlog::cfg::load_env_levels();
+
   storage_init();
 
   loop = uv_default_loop();
