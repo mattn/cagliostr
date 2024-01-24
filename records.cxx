@@ -22,7 +22,8 @@ static std::string join(const std::vector<std::string> &v,
 }
 
 bool insert_record(event_t &ev) {
-  const auto sql = R"(INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) VALUES ($1, $2, $3, $4, $5, $6, $7))";
+  const auto sql =
+      R"(INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) VALUES ($1, $2, $3, $4, $5, $6, $7))";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
@@ -42,7 +43,7 @@ bool insert_record(event_t &ev) {
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    spdlog::error("{}", sqlite3_errmsg(conn));
     sqlite3_free(stmt);
     return false;
   }
@@ -60,7 +61,8 @@ bool send_records(ws28::Client *client, std::string &sub,
     if (do_count) {
       sql = R"(SELECT COUNT(id) FROM event)";
     } else {
-      sql = R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event)";
+      sql =
+          R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event)";
     }
 
     std::vector<param_t> params;
@@ -124,11 +126,11 @@ bool send_records(ws28::Client *client, std::string &sub,
     sql += " ORDER BY created_at DESC LIMIT ?";
 
     sqlite3_stmt *stmt = nullptr;
-    std::cout << sql << std::endl;
     auto ret =
         sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
     if (ret != SQLITE_OK) {
-      fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+      spdlog::error("{}", sqlite3_errmsg(conn));
+      sqlite3_free(stmt);
       return false;
     }
 
@@ -148,7 +150,8 @@ bool send_records(ws28::Client *client, std::string &sub,
     if (do_count) {
       ret = sqlite3_step(stmt);
       if (ret == SQLITE_DONE) {
-        fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+        spdlog::error("{}", sqlite3_errmsg(conn));
+        sqlite3_free(stmt);
         return false;
       }
       count += sqlite3_column_int(stmt, 0);
@@ -177,10 +180,10 @@ bool send_records(ws28::Client *client, std::string &sub,
   }
 
   if (do_count) {
-      nlohmann::json cc;
-      cc["count"] = count;
-      nlohmann::json reply = {"COUNT", sub, cc};
-      relay_send(client, reply);
+    nlohmann::json cc;
+    cc["count"] = count;
+    nlohmann::json reply = {"COUNT", sub, cc};
+    relay_send(client, reply);
   }
   return true;
 }
@@ -197,7 +200,7 @@ bool delete_record_by_id(const std::string &id) {
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    spdlog::error("{}", sqlite3_errmsg(conn));
     sqlite3_free(stmt);
     return false;
   }
@@ -219,7 +222,7 @@ bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    spdlog::error("{}", sqlite3_errmsg(conn));
     sqlite3_free(stmt);
     return false;
   }
@@ -230,12 +233,14 @@ bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
 
 bool delete_record_by_kind_and_pubkey_and_dtag(
     int kind, const std::string &pubkey, const std::vector<std::string> &tag) {
-  std::string sql = R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ?)";
+  std::string sql =
+      R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ?)";
 
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    spdlog::error("{}", sqlite3_errmsg(conn));
+    sqlite3_free(stmt);
     return false;
   }
 
@@ -275,7 +280,7 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    spdlog::error("{}", sqlite3_errmsg(conn));
     sqlite3_free(stmt);
     return false;
   }
