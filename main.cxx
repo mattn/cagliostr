@@ -1,4 +1,4 @@
-#include "cagliostr.h"
+#include "cagliostr.hxx"
 
 // global variables
 std::vector<subscriber_t> subscribers;

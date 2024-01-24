@@ -1,4 +1,4 @@
-#include "cagliostr.h"
+#include "cagliostr.hxx"
 
 static std::string make_in_query(const std::string &name,
                                  const nlohmann::json &data) {
@@ -58,17 +58,41 @@ bool send_records(ws28::Client *client, std::string &sub,
     )";
   }
 
-  std::vector<std::string> strs;
+  typedef struct {
+    int t{};
+    int n{};
+    std::string s{};
+  } param_t;
+  std::vector<param_t> params;
   auto limit = 500;
   for (const auto &filter : filters) {
     if (!filter.ids.empty()) {
-      sql += " AND " + make_in_query("id", filter.ids);
+      std::string condition;
+      for (const auto &id : filter.ids) {
+        condition += "?,";
+        params.push_back({.t = 1, .s = id});
+      }
+      condition.pop_back();
+      sql += " AND id in (" + condition + ")";
     }
     if (!filter.authors.empty()) {
-      sql += " AND " + make_in_query("pubkey", filter.authors);
+      std::string condition;
+      for (const auto &author : filter.authors) {
+        condition += "?,";
+        params.push_back({.t = 1, .s = author});
+      }
+      condition.pop_back();
+      sql += " AND pubkey in (" + condition + ")";
     }
     if (!filter.kinds.empty()) {
       sql += " AND " + make_in_query("kind", filter.kinds);
+      std::string condition;
+      for (const auto &kind : filter.kinds) {
+        condition += "?,";
+        params.push_back({.t = 0, .n = kind});
+      }
+      condition += "?,";
+      sql += " AND kind in (" + condition + ")";
     }
     if (!filter.tags.empty()) {
       std::string condition;
@@ -78,8 +102,7 @@ bool send_records(ws28::Client *client, std::string &sub,
         }
         condition += "tags LIKE ?";
         nlohmann::json data = tag;
-        auto s = data.dump();
-        strs.push_back(s);
+        params.push_back({.t = 1, .s = data.dump()});
       }
       sql += " AND (" + condition + ")";
     }
@@ -98,7 +121,7 @@ bool send_records(ws28::Client *client, std::string &sub,
     }
     if (!filter.search.empty()) {
       sql += " AND content LIKE ?";
-      strs.push_back("%" + filter.search + "%");
+      params.push_back({.t = 1, .s = "%" + filter.search + "%"});
     }
   }
   sql += " ORDER BY created_at DESC LIMIT ?";
@@ -111,12 +134,19 @@ bool send_records(ws28::Client *client, std::string &sub,
     return false;
   }
 
-  for (size_t i = 0; i < strs.size(); i++) {
-    sqlite3_bind_text(stmt, i + 1, strs.at(i).data(), (int)strs.at(i).size(),
-                      nullptr);
+  for (size_t i = 0; i < params.size(); i++) {
+    switch (params.at(i).t) {
+    case 0:
+      sqlite3_bind_int(stmt, i + 1, params.at(i).n);
+      break;
+    case 1:
+      sqlite3_bind_text(stmt, i + 1, params.at(i).s.data(),
+                        (int)params.at(i).s.size(), nullptr);
+      break;
+    }
   }
 
-  sqlite3_bind_int(stmt, strs.size() + 1, limit);
+  sqlite3_bind_int(stmt, params.size() + 1, limit);
   if (do_count) {
     ret = sqlite3_step(stmt);
     if (ret == SQLITE_DONE) {
