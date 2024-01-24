@@ -452,6 +452,7 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
     relay_final(s.client, s.sub, "shutdown...");
   }
   uv_stop(loop);
+  sqlite3_close_v2(conn);
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
