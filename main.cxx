@@ -5,7 +5,7 @@ std::vector<subscriber_t> subscribers;
 sqlite3 *conn = nullptr;
 uv_loop_t *loop = nullptr;
 
-static std::string digest2hex(const uint8_t *data) {
+static inline std::string digest2hex(const uint8_t *data) {
   std::stringstream ss;
   ss << std::hex;
   for (int i = 0; i < 32; ++i) {
@@ -14,7 +14,7 @@ static std::string digest2hex(const uint8_t *data) {
   return ss.str();
 }
 
-static std::vector<uint8_t> hex2bytes(const std::string &hex) {
+static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
   std::vector<uint8_t> bytes;
   for (unsigned int i = 0; i < hex.length(); i += 2) {
     std::string s = hex.substr(i, 2);
@@ -24,19 +24,19 @@ static std::vector<uint8_t> hex2bytes(const std::string &hex) {
   return bytes;
 }
 
-void relay_send(ws28::Client *client, nlohmann::json &data) {
+void inline relay_send(ws28::Client *client, nlohmann::json &data) {
   auto s = data.dump();
   spdlog::debug("<< {}", s);
   client->Send(s.data(), s.size(), 1);
 }
 
-static void relay_notice(ws28::Client *client, const std::string &msg) {
+static inline void relay_notice(ws28::Client *client, const std::string &msg) {
   nlohmann::json data = {"NOTICE", msg};
   relay_send(client, data);
 }
 
-static void relay_notice(ws28::Client *client, const std::string &id,
-                         const std::string &msg) {
+static inline void relay_notice(ws28::Client *client, const std::string &id,
+                                const std::string &msg) {
   nlohmann::json data = {"NOTICE", id, msg};
   relay_send(client, data);
 }
@@ -257,9 +257,35 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
       return;
     }
 
-    if (!insert_record(ev)) {
-      relay_notice(client, "error: duplicate event");
-      return;
+    if (ev.kind == 5) {
+      for (const auto &tag : ev.tags) {
+        if (tag.size() >= 2 && tag[0] == "e") {
+          for (size_t i = 1; i < tag.size(); i++) {
+            delete_record_by_id(tag[i]);
+          }
+        }
+      }
+    } else {
+      if (20000 <= ev.kind && ev.kind < 30000) {
+        return;
+      } else if (ev.kind == 0 || ev.kind == 3 ||
+                 (10000 <= ev.kind && ev.kind < 20000)) {
+        if (delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey)) {
+          insert_record(ev);
+        }
+      } else if (30000 <= ev.kind && ev.kind < 40000) {
+        std::string d;
+        for (const auto & tag : ev.tags) {
+          if (tag.size() >= 2 && tag[0] == "d") {
+            delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey, tag);
+          }
+        }
+      }
+
+      if (!insert_record(ev)) {
+        relay_notice(client, "error: duplicate event");
+        return;
+      }
     }
 
     for (const auto &s : subscribers) {

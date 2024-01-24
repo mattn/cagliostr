@@ -1,4 +1,11 @@
 #include "cagliostr.hxx"
+#include <sstream>
+
+typedef struct {
+  int t{};
+  int n{};
+  std::string s{};
+} param_t;
 
 bool insert_record(event_t &ev) {
   const auto sql = R"(
@@ -50,11 +57,6 @@ bool send_records(ws28::Client *client, std::string &sub,
     )";
   }
 
-  typedef struct {
-    int t{};
-    int n{};
-    std::string s{};
-  } param_t;
   std::vector<param_t> params;
   auto limit = 500;
   for (const auto &filter : filters) {
@@ -170,5 +172,111 @@ bool send_records(ws28::Client *client, std::string &sub,
     sqlite3_finalize(stmt);
   }
 
+  return true;
+}
+
+bool delete_record_by_id(const std::string &id) {
+  const auto sql = R"(
+    DELETE FROM event WHERE id = ?
+  )";
+  sqlite3_stmt *stmt = nullptr;
+  auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
+  if (ret != SQLITE_OK) {
+    spdlog::error("{}", sqlite3_errmsg(conn));
+    return false;
+  }
+  sqlite3_bind_text(stmt, 1, id.data(), (int)id.size(), nullptr);
+
+  ret = sqlite3_step(stmt);
+  if (ret != SQLITE_DONE) {
+    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    sqlite3_free(stmt);
+    return false;
+  }
+  sqlite3_finalize(stmt);
+
+  return true;
+}
+
+bool delete_record_by_kind_and_pubkey(int kind, const std::string & pubkey) {
+  const auto sql = R"(
+    DELETE FROM event WHERE kind = ? AND pubkey = ?
+  )";
+  sqlite3_stmt *stmt = nullptr;
+  auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
+  if (ret != SQLITE_OK) {
+    spdlog::error("{}", sqlite3_errmsg(conn));
+    return false;
+  }
+  sqlite3_bind_int(stmt, 1, kind);
+  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
+
+  ret = sqlite3_step(stmt);
+  if (ret != SQLITE_DONE) {
+    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    sqlite3_free(stmt);
+    return false;
+  }
+  sqlite3_finalize(stmt);
+
+  return true;
+}
+
+bool delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
+                   const std::vector<std::string>& tag) {
+  std::string sql = R"(
+    SELECT
+      id
+    FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ?
+    )";
+
+  sqlite3_stmt *stmt = nullptr;
+  auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
+  if (ret != SQLITE_OK) {
+    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    return false;
+  }
+
+  nlohmann::json data = tag;
+  sqlite3_bind_int(stmt, 1, kind);
+  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
+  sqlite3_bind_text(stmt, 3, data.dump().data(), (int)data.dump().size(),
+                    nullptr);
+
+  std::vector<std::string> ids;
+  while (true) {
+    ret = sqlite3_step(stmt);
+    if (ret == SQLITE_DONE) {
+      break;
+    }
+    ids.push_back((char *)sqlite3_column_text(stmt, 0));
+  }
+  sqlite3_finalize(stmt);
+
+  std::ostringstream os;
+  std::string condition;
+  for (size_t i = 0; i < ids.size(); i++) {
+    condition += "?,";
+  }
+  condition.pop_back();
+  sql = "DELETE FROM event WHERE id in (" + condition + ")";
+
+  stmt = nullptr;
+  ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
+  if (ret != SQLITE_OK) {
+    spdlog::error("{}", sqlite3_errmsg(conn));
+    return false;
+  }
+  for (size_t i = 0; i < ids.size(); i++) {
+    sqlite3_bind_text(stmt, i + 1, ids[i].data(), (int)ids[i].size(), nullptr);
+  }
+
+  ret = sqlite3_step(stmt);
+  if (ret != SQLITE_DONE) {
+    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    sqlite3_free(stmt);
+    return false;
+  }
+  sqlite3_finalize(stmt);
   return true;
 }

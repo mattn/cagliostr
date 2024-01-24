@@ -55,5 +55,8 @@ extern sqlite3 *conn;
 bool insert_record(event_t &);
 bool send_records(ws28::Client *, std::string &, std::vector<filter_t> &, bool);
 void relay_send(ws28::Client *, nlohmann::json &);
+bool delete_record_by_id(const std::string &);
+bool delete_record_by_kind_and_pubkey(int, const std::string &);
+bool delete_record_by_kind_and_pubkey_and_dtag(int, const std::string &, const std::vector<std::string>&);
 
 #endif
