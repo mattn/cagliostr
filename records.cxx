@@ -53,13 +53,14 @@ bool send_records(ws28::Client *client, std::string &sub,
     sql = R"(
     SELECT
       id, pubkey, created_at, kind, tags, content, sig
-    FROM event WHERE 1 = 1
+    FROM event WHERE
     )";
   }
 
   std::vector<param_t> params;
   auto limit = 500;
   for (const auto &filter : filters) {
+    sql += "(";
     if (!filter.ids.empty()) {
       std::string condition;
       for (const auto &id : filter.ids) {
@@ -116,6 +117,10 @@ bool send_records(ws28::Client *client, std::string &sub,
       sql += " AND content LIKE ?";
       params.push_back({.t = 1, .s = "%" + filter.search + "%"});
     }
+    sql += ") OR ";
+  }
+  if (sql.ends_with(") OR ")) {
+    sql.resize(sql.size() - 4);
   }
   sql += " ORDER BY created_at DESC LIMIT ?";
 
@@ -198,7 +203,7 @@ bool delete_record_by_id(const std::string &id) {
   return true;
 }
 
-bool delete_record_by_kind_and_pubkey(int kind, const std::string & pubkey) {
+bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
   const auto sql = R"(
     DELETE FROM event WHERE kind = ? AND pubkey = ?
   )";
@@ -222,8 +227,8 @@ bool delete_record_by_kind_and_pubkey(int kind, const std::string & pubkey) {
   return true;
 }
 
-bool delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
-                   const std::vector<std::string>& tag) {
+bool delete_record_by_kind_and_pubkey_and_dtag(
+    int kind, const std::string &pubkey, const std::vector<std::string> &tag) {
   std::string sql = R"(
     SELECT
       id

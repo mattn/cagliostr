@@ -5,14 +5,12 @@ include(CheckLibraryExists)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -Wall -Wextra")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++20 -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -std=c++20 -Wall -Wextra")
 
 if (CMAKE_COMPILER_IS_GNUCC)
-    set(CMAKE_C_FLAGS_RELEASE "-O2 -g -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
-    set(CMAKE_C_FLAGS_DEBUG "-g -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
+    set(CMAKE_C_FLAGS_RELEASE "-O2 -std=c++20 -g -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
+    set(CMAKE_C_FLAGS_DEBUG "-g -std=c++20 -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
 endif()
 
 include_directories(
