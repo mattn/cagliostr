@@ -36,7 +36,7 @@ static void relay_notice(ws28::Client *client, const std::string &msg) {
 }
 
 static void relay_notice(ws28::Client *client, const std::string &id,
-                        const std::string &msg) {
+                         const std::string &msg) {
   nlohmann::json data = {"NOTICE", id, msg};
   relay_send(client, data);
 }
@@ -367,8 +367,9 @@ static void close_callback(ws28::Client *client) {
   }
 }
 
-static inline bool check_method(std::string& method) {
-    return method == "EVENT" || method == "REQ" || method == "COUNT" || method == "CLOSE";
+static inline bool check_method(std::string &method) {
+  return method == "EVENT" || method == "REQ" || method == "COUNT" ||
+         method == "CLOSE";
 }
 
 static void data_callback(ws28::Client *client, char *data, size_t len,
