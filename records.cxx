@@ -84,19 +84,24 @@ bool send_records(ws28::Client *client, std::string &sub,
       conditions.push_back("(" + join(match, " OR ") + ")");
     }
     if (!filter.kinds.empty()) {
-      std::string condition;
-      for (const auto &kind : filter.kinds) {
-        condition += "?,";
-        params.push_back({.t = 0, .n = kind});
+      if (filter.kinds.size() == 1) {
+        params.push_back({.t = 0, .n = filter.kinds.front()});
+        conditions.push_back("kind = ?");
+      } else {
+        std::string condition;
+        for (const auto &kind : filter.kinds) {
+          condition += "?,";
+          params.push_back({.t = 0, .n = kind});
+        }
+        condition.pop_back();
+        conditions.push_back("kind in (" + condition + ")");
       }
-      condition.pop_back();
-      conditions.push_back("kind in (" + condition + ")");
     }
     if (!filter.tags.empty()) {
       std::vector<std::string> match;
       for (const auto &tag : filter.tags) {
         nlohmann::json data = tag;
-        params.push_back({.t = 1, .s = data.dump()});
+        params.push_back({.t = 1, .s = "%" + data.dump() + "%"});
         match.push_back("tags LIKE ?");
       }
       conditions.push_back("(" + join(match, " OR ") + ")");
