@@ -68,22 +68,20 @@ bool send_records(ws28::Client *client, std::string &sub,
     std::vector<param_t> params;
     std::vector<std::string> conditions;
     if (!filter.ids.empty()) {
-      std::string condition;
+      std::vector<std::string> match;
       for (const auto &id : filter.ids) {
-        condition += "?,";
-        params.push_back({.t = 1, .s = id});
+        params.push_back({.t = 1, .s = id + "%"});
+        match.push_back("id LIKE ?");
       }
-      condition.pop_back();
-      conditions.push_back("id in (" + condition + ")");
+      conditions.push_back("(" + join(match, " OR ") + ")");
     }
     if (!filter.authors.empty()) {
-      std::string condition;
+      std::vector<std::string> match;
       for (const auto &author : filter.authors) {
-        condition += "?,";
-        params.push_back({.t = 1, .s = author});
+        params.push_back({.t = 1, .s = author + "%"});
+        match.push_back("pubkey LIKE ?");
       }
-      condition.pop_back();
-      conditions.push_back("pubkey in (" + condition + ")");
+      conditions.push_back("(" + join(match, " OR ") + ")");
     }
     if (!filter.kinds.empty()) {
       std::string condition;
