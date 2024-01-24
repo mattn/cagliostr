@@ -1,50 +1,4 @@
-#include <algorithm>
-#include <exception>
-#include <iostream>
-#include <sstream>
-#include <string>
-
-#include <sqlite3.h>
-
-#include <libbech32/bech32.h>
-#include <nlohmann/json.hpp>
-#include <openssl/evp.h>
-
-#include <secp256k1.h>
-#include <secp256k1_schnorrsig.h>
-
-#include <spdlog/spdlog.h>
-
-#include <Server.h>
-
-#include "version.h"
-
-typedef struct event_t {
-  std::string id;
-  std::string pubkey;
-  std::time_t created_at;
-  int kind;
-  std::vector<std::vector<std::string>> tags;
-  std::string content;
-  std::string sig;
-} event_t;
-
-typedef struct filter_t {
-  std::vector<std::string> ids;
-  std::vector<std::string> authors;
-  std::vector<int> kinds;
-  std::vector<std::vector<std::string>> tags;
-  std::time_t since;
-  std::time_t until;
-  int limit;
-  std::string search;
-} filter_t;
-
-typedef struct subscriber_t {
-  std::string sub;
-  ws28::Client *client{};
-  std::vector<filter_t> filters;
-} subscriber_t;
+#include "cagliostr.h"
 
 // global variables
 std::vector<subscriber_t> subscribers;
@@ -70,7 +24,7 @@ static std::vector<uint8_t> hex2bytes(const std::string &hex) {
   return bytes;
 }
 
-static void relay_send(ws28::Client *client, nlohmann::json &data) {
+void relay_send(ws28::Client *client, nlohmann::json &data) {
   auto s = data.dump();
   spdlog::debug("<< {}", s);
   client->Send(s.data(), s.size(), 1);
@@ -102,119 +56,6 @@ static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
                                             &pub);
   secp256k1_context_destroy(ctx);
   return result;
-}
-
-std::string make_in_query(const std::string &name, const nlohmann::json &data) {
-  auto s = data.dump();
-  s = s.substr(1, s.size() - 2);
-  return " " + name + " in (" + s + ")";
-}
-
-static bool send_records(ws28::Client *client, std::string &sub,
-                         std::vector<filter_t> &filters,
-                         bool do_count = false) {
-  std::string sql;
-  if (do_count) {
-    sql = R"(
-    SELECT
-      COUNT(id)
-    FROM event WHERE 1 = 1
-    )";
-  } else {
-    sql = R"(
-    SELECT
-      id, pubkey, created_at, kind, tags, content, sig
-    FROM event WHERE 1 = 1
-    )";
-  }
-
-  auto limit = 500;
-  for (const auto &filter : filters) {
-    if (!filter.ids.empty()) {
-      sql += " AND " + make_in_query("id", filter.ids);
-    }
-    if (!filter.authors.empty()) {
-      sql += " AND " + make_in_query("pubkey", filter.authors);
-    }
-    if (!filter.kinds.empty()) {
-      sql += " AND " + make_in_query("kind", filter.kinds);
-    }
-    if (!filter.tags.empty()) {
-      std::string condition;
-      for (const auto &tag : filter.tags) {
-        nlohmann::json data = tag;
-        auto s = data.dump();
-        if (!condition.empty()) {
-          condition += " OR ";
-        }
-        condition += "tags LIKE '%" + s + "%'";
-      }
-      sql += " AND (" + condition + ")";
-    }
-    if (filter.since != 0) {
-      std::ostringstream os;
-      os << filter.since;
-      sql += " AND created_at >= " + os.str();
-    }
-    if (filter.until != 0) {
-      std::ostringstream os;
-      os << filter.until;
-      sql += " AND created_at <= " + os.str();
-    }
-    if (filter.limit > 0 && filter.limit < limit) {
-      limit = filter.limit;
-    }
-    if (!filter.search.empty()) {
-      nlohmann::json data = filter.search;
-      auto s = data.dump();
-      s = s.substr(1, s.size() - 2);
-      sql += " AND content LIKE '%" + s + "%'";
-    }
-  }
-  sql += " ORDER BY created_at DESC LIMIT ?";
-
-  sqlite3_stmt *stmt = nullptr;
-  spdlog::debug("{}", sql);
-  auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
-  if (ret != SQLITE_OK) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
-    return false;
-  }
-  sqlite3_bind_int(stmt, 1, limit);
-  if (do_count) {
-    ret = sqlite3_step(stmt);
-    if (ret == SQLITE_DONE) {
-      fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
-      return false;
-    }
-    nlohmann::json cc;
-    cc["count"] = sqlite3_column_int(stmt, 0);
-    sqlite3_finalize(stmt);
-    nlohmann::json reply = {"COUNT", sub, cc};
-    relay_send(client, reply);
-  } else {
-    while (true) {
-      ret = sqlite3_step(stmt);
-      if (ret == SQLITE_DONE) {
-        break;
-      }
-      nlohmann::json ej;
-      ej["id"] = (char *)sqlite3_column_text(stmt, 0);
-      ej["pubkey"] = (char *)sqlite3_column_text(stmt, 1);
-      ej["created_at"] = sqlite3_column_int(stmt, 2);
-      ej["kind"] = sqlite3_column_int(stmt, 3);
-      const unsigned char *j = sqlite3_column_text(stmt, 4);
-      ej["tags"] = nlohmann::json::parse(j);
-      ej["content"] = (char *)sqlite3_column_text(stmt, 5);
-      ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
-
-      nlohmann::json reply = {"EVENT", sub, ej};
-      relay_send(client, reply);
-    }
-    sqlite3_finalize(stmt);
-  }
-
-  return true;
 }
 
 static void make_filter(filter_t &filter, nlohmann::json &data) {
@@ -288,7 +129,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
   }
   subscribers.push_back({.sub = sub, .client = client, .filters = filters});
 
-  send_records(client, sub, filters);
+  send_records(client, sub, filters, false);
   auto reply = nlohmann::json::array({"EOSE", sub});
   relay_send(client, reply);
 }
@@ -327,11 +168,12 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
   send_records(client, sub, filters, true);
 }
 
-static void do_relay_close(ws28::Client * /*client*/, nlohmann::json &data) {
+static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
   for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
-    if (it->sub == sub) {
+    if (it->client == client) {
       subscribers.erase(it);
+      break;
     }
   }
 }
@@ -394,40 +236,6 @@ static bool matched_filters(const std::vector<filter_t> &filters,
     found = true;
   }
   return found;
-}
-
-static bool insert_record(event_t &ev) {
-  const auto sql = R"(
-    INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-  )";
-  sqlite3_stmt *stmt = nullptr;
-  spdlog::debug("{}", sql);
-  auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
-  if (ret != SQLITE_OK) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
-    return false;
-  }
-  nlohmann::json tags = ev.tags;
-  auto s = tags.dump();
-  sqlite3_bind_text(stmt, 1, ev.id.data(), (int)ev.id.size(), nullptr);
-  sqlite3_bind_text(stmt, 2, ev.pubkey.data(), (int)ev.pubkey.size(), nullptr);
-  sqlite3_bind_int(stmt, 3, (int)ev.created_at);
-  sqlite3_bind_int(stmt, 4, ev.kind);
-  sqlite3_bind_text(stmt, 5, s.data(), (int)s.size(), nullptr);
-  sqlite3_bind_text(stmt, 6, ev.content.data(), (int)ev.content.size(),
-                    nullptr);
-  sqlite3_bind_text(stmt, 7, ev.sig.data(), (int)ev.sig.size(), nullptr);
-
-  ret = sqlite3_step(stmt);
-  if (ret != SQLITE_DONE) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
-    sqlite3_free(stmt);
-    return false;
-  }
-  sqlite3_finalize(stmt);
-
-  return true;
 }
 
 static void do_relay_event(ws28::Client *client, nlohmann::json &data) {

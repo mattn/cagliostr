@@ -5,7 +5,7 @@ include(CheckLibraryExists)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_FLAGS "-O3 -Wall -Wextra")
+#set(CMAKE_CXX_FLAGS "-O3 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -Wall -Wextra")
 
 if (CMAKE_COMPILER_IS_GNUCC)
@@ -22,7 +22,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/deps/gabime-spdlog/include
     )
 
-add_executable(cagliostr main.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
+add_executable(cagliostr main.cxx records.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
 
 set(LIBUV_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build/libuv.a)
 add_custom_target(libuv DEPENDS ${LIBUV_LIBRARIES})
