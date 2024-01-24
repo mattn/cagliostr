@@ -1,17 +1,28 @@
 #include "cagliostr.hxx"
 #include <sstream>
 
-typedef struct {
+typedef struct param_t {
   int t{};
   int n{};
   std::string s{};
 } param_t;
 
+static std::string join(const std::vector<std::string> &v,
+                        const char *delim = 0) {
+  std::string s;
+  if (!v.empty()) {
+    s += v[0];
+    for (decltype(v.size()) i = 1, c = v.size(); i < c; ++i) {
+      if (delim)
+        s += delim;
+      s += v[i];
+    }
+  }
+  return s;
+}
+
 bool insert_record(event_t &ev) {
-  const auto sql = R"(
-    INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-  )";
+  const auto sql = R"(INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) VALUES ($1, $2, $3, $4, $5, $6, $7))";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
@@ -42,25 +53,18 @@ bool insert_record(event_t &ev) {
 
 bool send_records(ws28::Client *client, std::string &sub,
                   std::vector<filter_t> &filters, bool do_count) {
-  std::string sql;
-  if (do_count) {
-    sql = R"(
-    SELECT
-      COUNT(id)
-    FROM event WHERE 1 = 1
-    )";
-  } else {
-    sql = R"(
-    SELECT
-      id, pubkey, created_at, kind, tags, content, sig
-    FROM event WHERE
-    )";
-  }
-
-  std::vector<param_t> params;
   auto limit = 500;
+  auto count = 0;
   for (const auto &filter : filters) {
-    sql += "(";
+    std::string sql;
+    if (do_count) {
+      sql = R"(SELECT COUNT(id) FROM event)";
+    } else {
+      sql = R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event)";
+    }
+
+    std::vector<param_t> params;
+    std::vector<std::string> conditions;
     if (!filter.ids.empty()) {
       std::string condition;
       for (const auto &id : filter.ids) {
@@ -68,7 +72,7 @@ bool send_records(ws28::Client *client, std::string &sub,
         params.push_back({.t = 1, .s = id});
       }
       condition.pop_back();
-      sql += " AND id in (" + condition + ")";
+      conditions.push_back("id in (" + condition + ")");
     }
     if (!filter.authors.empty()) {
       std::string condition;
@@ -77,7 +81,7 @@ bool send_records(ws28::Client *client, std::string &sub,
         params.push_back({.t = 1, .s = author});
       }
       condition.pop_back();
-      sql += " AND pubkey in (" + condition + ")";
+      conditions.push_back("pubkey in (" + condition + ")");
     }
     if (!filter.kinds.empty()) {
       std::string condition;
@@ -86,104 +90,103 @@ bool send_records(ws28::Client *client, std::string &sub,
         params.push_back({.t = 0, .n = kind});
       }
       condition.pop_back();
-      sql += " AND kind in (" + condition + ")";
+      conditions.push_back("kind in (" + condition + ")");
     }
     if (!filter.tags.empty()) {
-      std::string condition;
+      std::vector<std::string> match;
       for (const auto &tag : filter.tags) {
-        if (!condition.empty()) {
-          condition += " OR ";
-        }
-        condition += "tags LIKE ?";
         nlohmann::json data = tag;
         params.push_back({.t = 1, .s = data.dump()});
+        match.push_back("tags LIKE ?");
       }
-      sql += " AND (" + condition + ")";
+      conditions.push_back("(" + join(match, " OR ") + ")");
     }
     if (filter.since != 0) {
       std::ostringstream os;
       os << filter.since;
-      sql += " AND created_at >= " + os.str();
+      conditions.push_back("created_at >= " + os.str());
     }
     if (filter.until != 0) {
       std::ostringstream os;
       os << filter.until;
-      sql += " AND created_at <= " + os.str();
+      conditions.push_back("created_at <= " + os.str());
     }
     if (filter.limit > 0 && filter.limit < limit) {
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      sql += " AND content LIKE ?";
       params.push_back({.t = 1, .s = "%" + filter.search + "%"});
+      conditions.push_back("content LIKE ?");
     }
-    sql += ") OR ";
-  }
-  if (sql.ends_with(") OR ")) {
-    sql.resize(sql.size() - 4);
-  }
-  sql += " ORDER BY created_at DESC LIMIT ?";
-
-  sqlite3_stmt *stmt = nullptr;
-  auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
-  if (ret != SQLITE_OK) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
-    return false;
-  }
-
-  for (size_t i = 0; i < params.size(); i++) {
-    switch (params.at(i).t) {
-    case 0:
-      sqlite3_bind_int(stmt, i + 1, params.at(i).n);
-      break;
-    case 1:
-      sqlite3_bind_text(stmt, i + 1, params.at(i).s.data(),
-                        (int)params.at(i).s.size(), nullptr);
-      break;
+    if (!conditions.empty()) {
+      sql += " WHERE " + join(conditions, " AND ");
     }
-  }
+    sql += " ORDER BY created_at DESC LIMIT ?";
 
-  sqlite3_bind_int(stmt, params.size() + 1, limit);
-  if (do_count) {
-    ret = sqlite3_step(stmt);
-    if (ret == SQLITE_DONE) {
+    sqlite3_stmt *stmt = nullptr;
+    std::cout << sql << std::endl;
+    auto ret =
+        sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
+    if (ret != SQLITE_OK) {
       fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
       return false;
     }
-    nlohmann::json cc;
-    cc["count"] = sqlite3_column_int(stmt, 0);
-    sqlite3_finalize(stmt);
-    nlohmann::json reply = {"COUNT", sub, cc};
-    relay_send(client, reply);
-  } else {
-    while (true) {
-      ret = sqlite3_step(stmt);
-      if (ret == SQLITE_DONE) {
+
+    for (size_t i = 0; i < params.size(); i++) {
+      switch (params.at(i).t) {
+      case 0:
+        sqlite3_bind_int(stmt, i + 1, params.at(i).n);
+        break;
+      case 1:
+        sqlite3_bind_text(stmt, i + 1, params.at(i).s.data(),
+                          (int)params.at(i).s.size(), nullptr);
         break;
       }
-      nlohmann::json ej;
-      ej["id"] = (char *)sqlite3_column_text(stmt, 0);
-      ej["pubkey"] = (char *)sqlite3_column_text(stmt, 1);
-      ej["created_at"] = sqlite3_column_int(stmt, 2);
-      ej["kind"] = sqlite3_column_int(stmt, 3);
-      const unsigned char *j = sqlite3_column_text(stmt, 4);
-      ej["tags"] = nlohmann::json::parse(j);
-      ej["content"] = (char *)sqlite3_column_text(stmt, 5);
-      ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
-
-      nlohmann::json reply = {"EVENT", sub, ej};
-      relay_send(client, reply);
     }
-    sqlite3_finalize(stmt);
+
+    sqlite3_bind_int(stmt, params.size() + 1, limit);
+    if (do_count) {
+      ret = sqlite3_step(stmt);
+      if (ret == SQLITE_DONE) {
+        fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+        return false;
+      }
+      count += sqlite3_column_int(stmt, 0);
+      sqlite3_finalize(stmt);
+    } else {
+      while (true) {
+        ret = sqlite3_step(stmt);
+        if (ret == SQLITE_DONE) {
+          break;
+        }
+        nlohmann::json ej;
+        ej["id"] = (char *)sqlite3_column_text(stmt, 0);
+        ej["pubkey"] = (char *)sqlite3_column_text(stmt, 1);
+        ej["created_at"] = sqlite3_column_int(stmt, 2);
+        ej["kind"] = sqlite3_column_int(stmt, 3);
+        const unsigned char *j = sqlite3_column_text(stmt, 4);
+        ej["tags"] = nlohmann::json::parse(j);
+        ej["content"] = (char *)sqlite3_column_text(stmt, 5);
+        ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
+
+        nlohmann::json reply = {"EVENT", sub, ej};
+        relay_send(client, reply);
+      }
+      sqlite3_finalize(stmt);
+    }
   }
 
+  if (do_count) {
+      nlohmann::json cc;
+      cc["count"] = count;
+      nlohmann::json reply = {"COUNT", sub, cc};
+      relay_send(client, reply);
+  }
   return true;
 }
 
 bool delete_record_by_id(const std::string &id) {
-  const auto sql = R"(
-    DELETE FROM event WHERE id = ?
-  )";
+  const auto sql = R"(DELETE FROM event WHERE id = ?)";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
@@ -204,9 +207,7 @@ bool delete_record_by_id(const std::string &id) {
 }
 
 bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
-  const auto sql = R"(
-    DELETE FROM event WHERE kind = ? AND pubkey = ?
-  )";
+  const auto sql = R"(DELETE FROM event WHERE kind = ? AND pubkey = ?)";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
@@ -229,11 +230,7 @@ bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
 
 bool delete_record_by_kind_and_pubkey_and_dtag(
     int kind, const std::string &pubkey, const std::vector<std::string> &tag) {
-  std::string sql = R"(
-    SELECT
-      id
-    FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ?
-    )";
+  std::string sql = R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ?)";
 
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
