@@ -416,7 +416,9 @@ static void storage_init() {
   if (dsn == nullptr) {
     dsn = "./cagliostr.sqlite";
   }
-  auto ret = sqlite3_open(dsn, &conn);
+  auto ret = sqlite3_open_v2(
+      dsn, &conn, SQLITE_OPEN_URI | SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
+      nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
     exit(-1);
@@ -436,6 +438,7 @@ static void storage_init() {
 	CREATE INDEX IF NOT EXISTS timeidx ON event(created_at DESC);
 	CREATE INDEX IF NOT EXISTS kindidx ON event(kind);
 	CREATE INDEX IF NOT EXISTS kindtimeidx ON event(kind,created_at DESC);
+    PRAGMA journal_mode = WAL;
   )";
   spdlog::debug("{}", sql);
   ret = sqlite3_exec(conn, sql, nullptr, nullptr, nullptr);
