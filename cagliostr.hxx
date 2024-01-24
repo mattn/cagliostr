@@ -21,7 +21,6 @@
 
 #include <Server.h>
 
-#include "cagliostr.h"
 #include "version.h"
 
 typedef struct event_t {
@@ -35,13 +34,13 @@ typedef struct event_t {
 } event_t;
 
 typedef struct filter_t {
-  std::vector<std::string> ids;
-  std::vector<std::string> authors;
-  std::vector<int> kinds;
-  std::vector<std::vector<std::string>> tags;
-  std::time_t since;
-  std::time_t until;
-  int limit;
+  std::vector<std::string> ids{};
+  std::vector<std::string> authors{};
+  std::vector<int> kinds{};
+  std::vector<std::vector<std::string>> tags{};
+  std::time_t since{};
+  std::time_t until{};
+  int limit{500};
   std::string search;
 } filter_t;
 

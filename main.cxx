@@ -105,16 +105,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
       continue;
     }
     try {
-      filter_t filter = {
-          .ids = {},
-          .authors = {},
-          .kinds = {},
-          .tags = {},
-          .since = 0,
-          .until = 0,
-          .limit = 500,
-          .search = "",
-      };
+      filter_t filter;
       make_filter(filter, data[i]);
       filters.push_back(filter);
     } catch (std::exception &e) {
@@ -142,16 +133,7 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
       continue;
     }
     try {
-      filter_t filter = {
-          .ids = {},
-          .authors = {},
-          .kinds = {},
-          .tags = {},
-          .since = 0,
-          .until = 0,
-          .limit = 500,
-          .search = "",
-      };
+      filter_t filter;
       make_filter(filter, data[i]);
       filters.push_back(filter);
     } catch (std::exception &e) {
