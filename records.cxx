@@ -54,7 +54,6 @@ bool insert_record(event_t &ev) {
 
 bool send_records(ws28::Client *client, std::string &sub,
                   std::vector<filter_t> &filters, bool do_count) {
-  auto limit = 500;
   auto count = 0;
   for (const auto &filter : filters) {
     std::string sql;
@@ -65,6 +64,7 @@ bool send_records(ws28::Client *client, std::string &sub,
           R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event)";
     }
 
+    auto limit = 500;
     std::vector<param_t> params;
     std::vector<std::string> conditions;
     if (!filter.ids.empty()) {
@@ -130,7 +130,6 @@ bool send_records(ws28::Client *client, std::string &sub,
         sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
     if (ret != SQLITE_OK) {
       spdlog::error("{}", sqlite3_errmsg(conn));
-      sqlite3_free(stmt);
       return false;
     }
 
@@ -151,7 +150,7 @@ bool send_records(ws28::Client *client, std::string &sub,
       ret = sqlite3_step(stmt);
       if (ret == SQLITE_DONE) {
         spdlog::error("{}", sqlite3_errmsg(conn));
-        sqlite3_free(stmt);
+        sqlite3_finalize(stmt);
         return false;
       }
       count += sqlite3_column_int(stmt, 0);
