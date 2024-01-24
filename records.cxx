@@ -1,6 +1,7 @@
 #include "cagliostr.h"
 
-static std::string make_in_query(const std::string &name, const nlohmann::json &data) {
+static std::string make_in_query(const std::string &name,
+                                 const nlohmann::json &data) {
   auto s = data.dump();
   s = s.substr(1, s.size() - 2);
   return " " + name + " in (" + s + ")";
@@ -41,8 +42,7 @@ bool insert_record(event_t &ev) {
 }
 
 bool send_records(ws28::Client *client, std::string &sub,
-                         std::vector<filter_t> &filters,
-                         bool do_count) {
+                  std::vector<filter_t> &filters, bool do_count) {
   std::string sql;
   if (do_count) {
     sql = R"(
@@ -58,6 +58,7 @@ bool send_records(ws28::Client *client, std::string &sub,
     )";
   }
 
+  std::vector<std::string> strs;
   auto limit = 500;
   for (const auto &filter : filters) {
     if (!filter.ids.empty()) {
@@ -72,12 +73,13 @@ bool send_records(ws28::Client *client, std::string &sub,
     if (!filter.tags.empty()) {
       std::string condition;
       for (const auto &tag : filter.tags) {
-        nlohmann::json data = tag;
-        auto s = data.dump();
         if (!condition.empty()) {
           condition += " OR ";
         }
-        condition += "tags LIKE '%" + s + "%'";
+        condition += "tags LIKE ?";
+        nlohmann::json data = tag;
+        auto s = data.dump();
+        strs.push_back(s);
       }
       sql += " AND (" + condition + ")";
     }
@@ -95,22 +97,26 @@ bool send_records(ws28::Client *client, std::string &sub,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      nlohmann::json data = filter.search;
-      auto s = data.dump();
-      s = s.substr(1, s.size() - 2);
-      sql += " AND content LIKE '%" + s + "%'";
+      sql += " AND content LIKE ?";
+      strs.push_back("%" + filter.search + "%");
     }
   }
   sql += " ORDER BY created_at DESC LIMIT ?";
+  spdlog::debug("{}", sql);
 
   sqlite3_stmt *stmt = nullptr;
-  spdlog::debug("{}", sql);
   auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
     return false;
   }
-  sqlite3_bind_int(stmt, 1, limit);
+
+  for (auto i = 0; i < strs.size(); i++) {
+    sqlite3_bind_text(stmt, i + 1, strs.at(i).data(), (int)strs.at(i).size(),
+                      nullptr);
+  }
+
+  sqlite3_bind_int(stmt, strs.size() + 1, limit);
   if (do_count) {
     ret = sqlite3_step(stmt);
     if (ret == SQLITE_DONE) {
