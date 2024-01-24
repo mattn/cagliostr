@@ -285,7 +285,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
         relay_send(s.client, reply);
       }
     }
-    nlohmann::json reply = {"OK", ev.id, true};
+    nlohmann::json reply = {"OK", ev.id, true, ""};
     relay_send(client, reply);
   } catch (std::exception &e) {
     spdlog::warn("!! {}", e.what());
