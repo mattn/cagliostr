@@ -368,7 +368,7 @@ static void close_callback(ws28::Client *client) {
 }
 
 static inline bool check_method(std::string& method) {
-    return method != "EVENT" && method != "REQ" && method != "COUNT" && method != "CLOSE";
+    return method == "EVENT" || method == "REQ" || method == "COUNT" || method == "CLOSE";
 }
 
 static void data_callback(ws28::Client *client, char *data, size_t len,
