@@ -100,9 +100,15 @@ bool send_records(ws28::Client *client, std::string &sub,
     if (!filter.tags.empty()) {
       std::vector<std::string> match;
       for (const auto &tag : filter.tags) {
-        nlohmann::json data = tag;
-        params.push_back({.t = 1, .s = "%" + data.dump() + "%"});
-        match.push_back("tags LIKE ?");
+        if (tag.size() < 2) {
+          continue;
+        }
+        auto first = tag[0];
+        for (size_t i = 1; i < tag.size(); i++) {
+          nlohmann::json data = {first, tag[i]};
+          params.push_back({.t = 1, .s = "%" + data.dump() + "%"});
+          match.push_back("tags LIKE ?");
+        }
       }
       conditions.push_back("(" + join(match, " OR ") + ")");
     }
