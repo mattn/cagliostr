@@ -6,10 +6,9 @@ bool insert_record(event_t &ev) {
     VALUES ($1, $2, $3, $4, $5, $6, $7)
   )";
   sqlite3_stmt *stmt = nullptr;
-  spdlog::debug("{}", sql);
   auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    spdlog::error("{}", sqlite3_errmsg(conn));
     return false;
   }
   nlohmann::json tags = ev.tags;
@@ -117,7 +116,6 @@ bool send_records(ws28::Client *client, std::string &sub,
     }
   }
   sql += " ORDER BY created_at DESC LIMIT ?";
-  spdlog::debug("{}", sql);
 
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);

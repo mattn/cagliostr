@@ -409,6 +409,10 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   relay_final(client, "", "error: invalid request");
 }
 
+static void sqlite3_trace_callback(void *foo, const char *statement) {
+  spdlog::debug("{}", statement);
+}
+
 static void storage_init() {
   spdlog::debug("initialize storage");
 
@@ -416,13 +420,15 @@ static void storage_init() {
   if (dsn == nullptr) {
     dsn = "./cagliostr.sqlite";
   }
-  auto ret = sqlite3_open_v2(
-      dsn, &conn, SQLITE_OPEN_URI | SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
-      nullptr);
+  auto ret = sqlite3_open_v2(dsn, &conn,
+                             SQLITE_OPEN_URI | SQLITE_OPEN_READWRITE |
+                                 SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
+                             nullptr);
   if (ret != SQLITE_OK) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    spdlog::error("{}", sqlite3_errmsg(conn));
     exit(-1);
   }
+  sqlite3_trace(conn, sqlite3_trace_callback, nullptr);
 
   const auto sql = R"(
 	CREATE TABLE IF NOT EXISTS event (
@@ -440,10 +446,9 @@ static void storage_init() {
 	CREATE INDEX IF NOT EXISTS kindtimeidx ON event(kind,created_at DESC);
     PRAGMA journal_mode = WAL;
   )";
-  spdlog::debug("{}", sql);
   ret = sqlite3_exec(conn, sql, nullptr, nullptr, nullptr);
   if (ret != SQLITE_OK) {
-    fprintf(stderr, "%s\n", sqlite3_errmsg(conn));
+    spdlog::error("{}", sqlite3_errmsg(conn));
     exit(-1);
   }
 }
