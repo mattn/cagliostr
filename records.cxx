@@ -91,7 +91,7 @@ bool send_records(ws28::Client *client, std::string &sub,
         condition += "?,";
         params.push_back({.t = 0, .n = kind});
       }
-      condition += "?,";
+      condition.pop_back();
       sql += " AND kind in (" + condition + ")";
     }
     if (!filter.tags.empty()) {
