@@ -5,13 +5,14 @@ include(CheckLibraryExists)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_FLAGS "-O3 -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -Wall -Wextra")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
 if (CMAKE_COMPILER_IS_GNUCC)
-    set(CMAKE_C_FLAGS "-O2 -g -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
+    set(CMAKE_C_FLAGS_RELEASE "-O2 -g -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
+    set(CMAKE_C_FLAGS_DEBUG "-g -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
 endif()
 
 include_directories(
@@ -43,7 +44,7 @@ add_custom_command(
     OUTPUT ${LIBSECP256K1_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1
     COMMAND sh
-    ARGS -c 'cmake -B build  -DBUILD_SHARED_LIBS=off && cmake --build build'
+    ARGS -c 'cmake -B build  -DBUILD_SHARED_LIBS=off && cmake --build build -t secp256k1'
     )
 add_dependencies(cagliostr libsecp256k1)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src)
