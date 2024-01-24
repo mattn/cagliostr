@@ -30,10 +30,14 @@ void relay_send(ws28::Client *client, nlohmann::json &data) {
   client->Send(s.data(), s.size(), 1);
 }
 
-static void relay_final(ws28::Client *client, const std::string &id,
+static void relay_notice(ws28::Client *client, const std::string &msg) {
+  nlohmann::json data = {"NOTICE", msg};
+  relay_send(client, data);
+}
+
+static void relay_notice(ws28::Client *client, const std::string &id,
                         const std::string &msg) {
-  spdlog::debug("FINAL");
-  nlohmann::json data = {"CLOSED", id, msg};
+  nlohmann::json data = {"NOTICE", id, msg};
   relay_send(client, data);
 }
 
@@ -242,19 +246,19 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
 
     auto id = digest2hex(digest);
     if (id != ev.id) {
-      relay_final(client, "", "error: invalid id");
+      relay_notice(client, "error: invalid id");
       return;
     }
 
     auto bytes_sig = hex2bytes(ev.sig);
     auto bytes_pub = hex2bytes(ev.pubkey);
     if (!signature_verify(bytes_sig, bytes_pub, digest)) {
-      relay_final(client, "", "error: invalid signature");
+      relay_notice(client, "error: invalid signature");
       return;
     }
 
     if (!insert_record(ev)) {
-      relay_final(client, "", "error: duplicate event");
+      relay_notice(client, "error: duplicate event");
       return;
     }
 
@@ -363,53 +367,60 @@ static void close_callback(ws28::Client *client) {
   }
 }
 
-static void data_callback(ws28::Client *client, char *data, size_t len,
-                          int /*opcode*/) {
-  std::string s;
-  s.append(data, len);
-  spdlog::debug(">> {}", s);
-  auto payload = nlohmann::json::parse(s);
-
-  if (!payload.is_array() || payload.size() < 2) {
-    relay_final(client, "", "error: invalid request");
-    return;
-  }
-
-  std::string method = payload[0];
-  if (payload[0] != "EVENT" && payload[0] != "REQ" && payload[0] != "COUNT" &&
-      payload[0] != "CLOSE") {
-    relay_final(client, "", "error: invalid request");
-    return;
-  }
-  if (method == "REQ") {
-    if (payload.size() < 3) {
-      relay_final(client, "", "error: invalid request");
-      return;
-    }
-    do_relay_req(client, payload);
-    return;
-  }
-  if (method == "COUNT") {
-    if (payload.size() < 3) {
-      relay_final(client, "", "error: invalid request");
-      return;
-    }
-    do_relay_count(client, payload);
-    return;
-  }
-  if (method == "CLOSE") {
-    do_relay_close(client, payload);
-    return;
-  }
-  if (method == "EVENT") {
-    do_relay_event(client, payload);
-    return;
-  }
-
-  relay_final(client, "", "error: invalid request");
+static inline bool check_method(std::string& method) {
+    return method != "EVENT" && method != "REQ" && method != "COUNT" && method != "CLOSE";
 }
 
-static void sqlite3_trace_callback(void *foo, const char *statement) {
+static void data_callback(ws28::Client *client, char *data, size_t len,
+                          int /*opcode*/) {
+  std::string s(data, len);
+  spdlog::debug(">> {}", s);
+  try {
+    auto payload = nlohmann::json::parse(s);
+
+    if (!payload.is_array() || payload.size() < 2) {
+      relay_notice(client, "error: invalid request");
+      return;
+    }
+
+    std::string method = payload[0];
+    if (!check_method(method)) {
+      relay_notice(client, payload[1], "error: invalid request");
+      return;
+    }
+    if (method == "REQ") {
+      if (payload.size() < 3) {
+        relay_notice(client, payload[1], "error: invalid request");
+        return;
+      }
+      do_relay_req(client, payload);
+      return;
+    }
+    if (method == "COUNT") {
+      if (payload.size() < 3) {
+        relay_notice(client, payload[1], "error: invalid request");
+        return;
+      }
+      do_relay_count(client, payload);
+      return;
+    }
+    if (method == "CLOSE") {
+      do_relay_close(client, payload);
+      return;
+    }
+    if (method == "EVENT") {
+      do_relay_event(client, payload);
+      return;
+    }
+    relay_notice(client, payload[1], "error: invalid request");
+  } catch (std::exception &e) {
+    spdlog::warn("!! {}", e.what());
+    relay_notice(client, std::string("error: ") + e.what());
+  }
+}
+
+static void sqlite3_trace_callback(void * /*user_data*/,
+                                   const char *statement) {
   spdlog::debug("{}", statement);
 }
 
@@ -457,7 +468,9 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
   uv_signal_stop(req);
   spdlog::warn("!! SIGINT");
   for (const auto &s : subscribers) {
-    relay_final(s.client, s.sub, "shutdown...");
+    relay_notice(s.client, s.sub, "shutdown...");
+    s.client->Close(0);
+    s.client->Destroy();
   }
   uv_stop(loop);
   sqlite3_close_v2(conn);
