@@ -516,8 +516,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   server.SetCheckTCPConnectionCallback(tcpcheck_callback);
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
-  server.SetAllowAlternativeProtocol(true);
-  server.StopListening();
   server.Listen(7447);
   spdlog::info("server started :7447");
 
