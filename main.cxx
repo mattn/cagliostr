@@ -229,7 +229,7 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   return found;
 }
 
-static bool check_event(const event_t ev) {
+static bool check_event(const event_t& ev) {
   nlohmann::json check = {0,       ev.pubkey, ev.created_at,
                                 ev.kind, ev.tags,   ev.content};
   auto dump = check.dump();
@@ -476,10 +476,6 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
   uv_stop(loop);
   sqlite3_close_v2(conn);
 }
-
-using commandtype = std::function<void(
-    const std::string &, std::vector<std::string>::const_iterator,
-    std::vector<std::string>::const_iterator)>;
 
 static std::string env(const char *name, const char *defvalue) {
   const char *value = getenv(name);

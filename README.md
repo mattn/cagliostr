@@ -1,11 +1,18 @@
 # cagliostr
 
-Experimental Nostr Relay written in C++
+High performance Nostr Relay written in C++
 
 ## Usage
 
 ```
-$ ./cagliostr
+$ ./cagliostr --help
+Usage: cagliostr [--help] [--version] [-database DATABASE] [-loglevel LEVEL]
+
+Optional arguments:
+  -h, --help          shows help message and exits 
+  -v, --version       prints version information and exits 
+  -database DATABASE  connection string [default: "./cagliostr.sqlite"]
+  -loglevel LEVEL     log level [default: "info"]
 ```
 
 ## Requirements
