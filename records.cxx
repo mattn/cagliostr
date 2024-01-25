@@ -25,7 +25,7 @@ bool insert_record(const event_t &ev) {
   const auto sql =
       R"(INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) VALUES ($1, $2, $3, $4, $5, $6, $7))";
   sqlite3_stmt *stmt = nullptr;
-  auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
+  auto ret = sqlite3_prepare_v2(conn, sql, -1, &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
     return false;
@@ -44,7 +44,7 @@ bool insert_record(const event_t &ev) {
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    sqlite3_free(stmt);
+    sqlite3_finalize(stmt);
     return false;
   }
   sqlite3_finalize(stmt);
@@ -136,7 +136,7 @@ bool send_records(ws28::Client *client, const std::string &sub,
 
     sqlite3_stmt *stmt = nullptr;
     auto ret =
-        sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
+        sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
     if (ret != SQLITE_OK) {
       spdlog::error("{}", sqlite3_errmsg(conn));
       return false;
@@ -199,7 +199,7 @@ bool send_records(ws28::Client *client, const std::string &sub,
 bool delete_record_by_id(const std::string &id) {
   const auto sql = R"(DELETE FROM event WHERE id = ?)";
   sqlite3_stmt *stmt = nullptr;
-  auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
+  auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
     return false;
@@ -209,7 +209,7 @@ bool delete_record_by_id(const std::string &id) {
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    sqlite3_free(stmt);
+    sqlite3_finalize(stmt);
     return false;
   }
   sqlite3_finalize(stmt);
@@ -220,7 +220,7 @@ bool delete_record_by_id(const std::string &id) {
 bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
   const auto sql = R"(DELETE FROM event WHERE kind = ? AND pubkey = ?)";
   sqlite3_stmt *stmt = nullptr;
-  auto ret = sqlite3_prepare(conn, sql, (int)strlen(sql), &stmt, nullptr);
+  auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
     return false;
@@ -231,7 +231,7 @@ bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    sqlite3_free(stmt);
+    sqlite3_finalize(stmt);
     return false;
   }
   sqlite3_finalize(stmt);
@@ -245,10 +245,10 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
       R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ?)";
 
   sqlite3_stmt *stmt = nullptr;
-  auto ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
+  auto ret =
+      sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    sqlite3_free(stmt);
     return false;
   }
 
@@ -257,6 +257,7 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
   sqlite3_bind_text(stmt, 3, data.dump().data(), (int)data.dump().size(),
                     nullptr);
+  data.clear();
 
   std::vector<std::string> ids;
   while (true) {
@@ -268,6 +269,10 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
   }
   sqlite3_finalize(stmt);
 
+  if (ids.empty()) {
+    return true;
+  }
+
   std::ostringstream os;
   std::string condition;
   for (size_t i = 0; i < ids.size(); i++) {
@@ -277,7 +282,7 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
   sql = "DELETE FROM event WHERE id in (" + condition + ")";
 
   stmt = nullptr;
-  ret = sqlite3_prepare(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
+  ret = sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
     return false;
@@ -289,7 +294,7 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    sqlite3_free(stmt);
+    sqlite3_finalize(stmt);
     return false;
   }
   sqlite3_finalize(stmt);

@@ -229,10 +229,32 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   return found;
 }
 
+static bool check_event(const event_t ev) {
+  nlohmann::json check = {0,       ev.pubkey, ev.created_at,
+                                ev.kind, ev.tags,   ev.content};
+  auto dump = check.dump();
+  check.clear();
+
+  uint8_t digest[32] = {0};
+  EVP_Digest(dump.data(), dump.size(), digest, nullptr, EVP_sha256(), nullptr);
+
+  auto id = digest2hex(digest);
+  if (id != ev.id) {
+    return false;
+  }
+
+  auto bytes_sig = hex2bytes(ev.sig);
+  auto bytes_pub = hex2bytes(ev.pubkey);
+  if (!signature_verify(bytes_sig, bytes_pub, digest)) {
+    return false;
+  }
+  return true;
+}
+
 static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
-  auto ej = data[1];
-  event_t ev = {};
   try {
+    auto ej = data[1];
+    event_t ev = {};
     ev.id = ej["id"];
     ev.pubkey = ej["pubkey"];
     ev.content = ej["content"];
@@ -241,24 +263,8 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
     ev.tags = ej["tags"];
     ev.sig = ej["sig"];
 
-    const nlohmann::json check = {0,       ev.pubkey, ev.created_at,
-                                  ev.kind, ev.tags,   ev.content};
-    auto dump = check.dump();
-
-    uint8_t digest[32] = {0};
-    EVP_Digest(dump.data(), dump.size(), digest, nullptr, EVP_sha256(),
-               nullptr);
-
-    auto id = digest2hex(digest);
-    if (id != ev.id) {
-      relay_notice(client, "error: invalid id");
-      return;
-    }
-
-    auto bytes_sig = hex2bytes(ev.sig);
-    auto bytes_pub = hex2bytes(ev.pubkey);
-    if (!signature_verify(bytes_sig, bytes_pub, digest)) {
-      relay_notice(client, "error: invalid signature");
+    if (!check_event(ev)) {
+      relay_notice(client, "error: invalid id or signature");
       return;
     }
 
@@ -266,7 +272,9 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
       for (const auto &tag : ev.tags) {
         if (tag.size() >= 2 && tag[0] == "e") {
           for (size_t i = 1; i < tag.size(); i++) {
-            delete_record_by_id(tag[i]);
+            if (!delete_record_by_id(tag[i])) {
+              return;
+            }
           }
         }
       }
@@ -275,14 +283,16 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
         return;
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
-        if (delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey)) {
-          insert_record(ev);
+        if (!delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey)) {
+          return;
         }
       } else if (30000 <= ev.kind && ev.kind < 40000) {
         std::string d;
         for (const auto &tag : ev.tags) {
           if (tag.size() >= 2 && tag[0] == "d") {
-            delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey, tag);
+            if (!delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey, tag)) {
+              return;
+            }
           }
         }
       }
@@ -471,7 +481,7 @@ using commandtype = std::function<void(
     const std::string &, std::vector<std::string>::const_iterator,
     std::vector<std::string>::const_iterator)>;
 
-static std::string env(const char* name, const char* defvalue) {
+static std::string env(const char *name, const char *defvalue) {
   const char *value = getenv(name);
   if (value == nullptr) {
     value = defvalue;
