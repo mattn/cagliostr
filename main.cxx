@@ -386,7 +386,8 @@ static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
   return true;
 }
 
-static void close_callback(ws28::Client *client) {
+static void disconnect_callback(ws28::Client *client) {
+  spdlog::debug("DISCONNECT {}", req.ip);
   auto it = subscribers.begin();
   while (it != subscribers.end()) {
     if (it->client == client) {
@@ -520,7 +521,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
   auto server = ws28::Server{loop, nullptr};
   server.SetClientDataCallback(data_callback);
   server.SetClientConnectedCallback(connect_callback);
-  server.SetClientDisconnectedCallback(close_callback);
+  server.SetClientDisconnectedCallback(disconnect_callback);
   server.SetCheckTCPConnectionCallback(tcpcheck_callback);
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
