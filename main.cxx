@@ -194,12 +194,12 @@ static bool matched_filters(const std::vector<filter_t> &filters,
       }
     }
     if (filter.since > 0) {
-      if (filter.since >= ev.created_at) {
+      if (filter.since > ev.created_at) {
         continue;
       }
     }
     if (filter.until > 0) {
-      if (ev.created_at >= filter.until) {
+      if (ev.created_at > filter.until) {
         continue;
       }
     }
@@ -294,9 +294,11 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
     }
 
     for (const auto &s : subscribers) {
+      /*
       if (s.client == client) {
         continue;
       }
+      */
       if (matched_filters(s.filters, ev)) {
         nlohmann::json reply = {"EVENT", s.sub, ej};
         relay_send(s.client, reply);
