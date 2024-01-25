@@ -26,7 +26,7 @@ static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
 
 void inline relay_send(ws28::Client *client, nlohmann::json &data) {
   auto s = data.dump();
-  spdlog::debug("<< {}", s);
+  spdlog::debug("{} << {}", client->GetIP(), s);
   client->Send(s.data(), s.size(), 1);
 }
 
@@ -401,7 +401,7 @@ static inline bool check_method(std::string &method) {
 static void data_callback(ws28::Client *client, char *data, size_t len,
                           int /*opcode*/) {
   std::string s(data, len);
-  spdlog::debug(">> {}", s);
+  spdlog::debug("{} >> {}", client->GetIP(), s);
   try {
     auto payload = nlohmann::json::parse(s);
 
