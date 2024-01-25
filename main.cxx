@@ -387,7 +387,7 @@ static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
 }
 
 static void disconnect_callback(ws28::Client *client) {
-  spdlog::debug("DISCONNECT {}", req.ip);
+  spdlog::debug("DISCONNECT {}", client->GetIP());
   auto it = subscribers.begin();
   while (it != subscribers.end()) {
     if (it->client == client) {
