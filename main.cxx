@@ -157,7 +157,7 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
 static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
   for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
-    if (it->client == client) {
+    if (it->sub == sub && it->client == client) {
       subscribers.erase(it);
       break;
     }
@@ -388,7 +388,6 @@ static void close_callback(ws28::Client *client) {
   for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
     if (it->client == client) {
       subscribers.erase(it);
-      break;
     }
   }
 }
@@ -494,10 +493,14 @@ static void storage_init() {
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
   uv_signal_stop(req);
   spdlog::warn("!! SIGINT");
-  for (const auto &s : subscribers) {
+  for (auto &s : subscribers) {
+    if (s.client == nullptr) {
+      continue;
+    }
     relay_notice(s.client, s.sub, "shutdown...");
     s.client->Close(0);
     s.client->Destroy();
+    s.client = nullptr;
   }
   uv_stop(loop);
   sqlite3_close_v2(conn);
