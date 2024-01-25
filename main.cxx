@@ -156,10 +156,12 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
 
 static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
   std::string sub = data[1];
-  for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
+  auto it = subscribers.begin();
+  while (it != subscribers.end()) {
     if (it->sub == sub && it->client == client) {
-      subscribers.erase(it);
-      break;
+      it = subscribers.erase(it);
+    } else {
+      it++;
     }
   }
 }
@@ -385,9 +387,12 @@ static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
 }
 
 static void close_callback(ws28::Client *client) {
-  for (auto it = subscribers.begin(); it != subscribers.end(); ++it) {
+  auto it = subscribers.begin();
+  while (it != subscribers.end()) {
     if (it->client == client) {
-      subscribers.erase(it);
+      it = subscribers.erase(it);
+    } else {
+      it++;
     }
   }
 }
