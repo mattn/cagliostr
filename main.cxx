@@ -194,12 +194,12 @@ static bool matched_filters(const std::vector<filter_t> &filters,
       }
     }
     if (filter.since > 0) {
-      if (filter.since <= ev.created_at) {
+      if (filter.since >= ev.created_at) {
         continue;
       }
     }
     if (filter.until > 0) {
-      if (ev.created_at <= filter.until) {
+      if (ev.created_at >= filter.until) {
         continue;
       }
     }
