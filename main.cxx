@@ -294,11 +294,6 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
     }
 
     for (const auto &s : subscribers) {
-      /*
-      if (s.client == client) {
-        continue;
-      }
-      */
       if (matched_filters(s.filters, ev)) {
         nlohmann::json reply = {"EVENT", s.sub, ej};
         relay_send(s.client, reply);
