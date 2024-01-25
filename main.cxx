@@ -514,7 +514,7 @@ int main(int argc, char *argv[]) {
   server.SetClientConnectedCallback(connect_callback);
   server.SetClientDisconnectedCallback(disconnect_callback);
   server.SetCheckTCPConnectionCallback(tcpcheck_callback);
-  server.SetMaxMessageSize(SIZE_MAX);
+  server.SetMaxMessageSize(65535);
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(7447);
