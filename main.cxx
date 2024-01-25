@@ -474,24 +474,24 @@ using commandtype = std::function<void(
     const std::string &, std::vector<std::string>::const_iterator,
     std::vector<std::string>::const_iterator)>;
 
-static std::string dsn() {
-  const char *dsn = getenv("DATABASE_URL");
-  if (dsn == nullptr) {
-    dsn = "./cagliostr.sqlite";
+static std::string env(const char* name, const char* defvalue) {
+  const char *value = getenv(name);
+  if (value == nullptr) {
+    value = defvalue;
   }
-  return dsn;
+  return value;
 }
 
 int main(int argc, char *argv[]) {
   argparse::ArgumentParser program("cagliostr", VERSION);
   try {
     program.add_argument("-database")
-        .default_value(dsn())
+        .default_value(env("DATABASE_URL", "./cagliostr.sqlite"))
         .help("connection string")
         .metavar("DATABASE")
         .nargs(1);
     program.add_argument("-loglevel")
-        .default_value("info")
+        .default_value(env("SPDLOG_LEVEL", "info"))
         .help("log level")
         .metavar("LEVEL")
         .nargs(1);
