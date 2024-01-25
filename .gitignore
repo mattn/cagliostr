@@ -39,3 +39,10 @@
 
 # binary
 cagliostr
+
+.idea
+build/
+cmake-build-debug/
+kustomize/
+litestream.yaml
+*.sh
