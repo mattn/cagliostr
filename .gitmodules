@@ -19,3 +19,9 @@
 [submodule "deps/gabime-spdlog"]
 	path = deps/gabime-spdlog
 	url = https://github.com/gabime/spdlog
+[submodule "deps/taywee-args"]
+	path = deps/taywee-args
+	url = https://github.com/taywee/args
+[submodule "deps/p-ranav-argparse"]
+	path = deps/p-ranav-argparse
+	url = https://github.com/p-ranav/argparse

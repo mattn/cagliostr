@@ -11,3 +11,5 @@ deps/bitcoin-core-libsecp256k1/include
 deps/libuv-libuv/include
 -I
 deps/gabime-spdlog/include
+-I
+deps/p-ranav-argparse/include

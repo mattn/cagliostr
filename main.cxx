@@ -1,4 +1,7 @@
 #include "cagliostr.hxx"
+#include "spdlog/common.h"
+#include "spdlog/spdlog.h"
+#include <argparse/argparse.hpp>
 
 // global variables
 std::vector<subscriber_t> subscribers;
@@ -24,7 +27,7 @@ static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
   return bytes;
 }
 
-void inline relay_send(ws28::Client *client, nlohmann::json &data) {
+void relay_send(ws28::Client *client, const nlohmann::json &data) {
   auto s = data.dump();
   spdlog::debug("{} << {}", client->GetIP(), s);
   client->Send(s.data(), s.size(), 1);
@@ -277,7 +280,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
         }
       } else if (30000 <= ev.kind && ev.kind < 40000) {
         std::string d;
-        for (const auto & tag : ev.tags) {
+        for (const auto &tag : ev.tags) {
           if (tag.size() >= 2 && tag[0] == "d") {
             delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey, tag);
           }
@@ -451,51 +454,6 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   }
 }
 
-static void sqlite3_trace_callback(void * /*user_data*/,
-                                   const char *statement) {
-  spdlog::debug("{}", statement);
-}
-
-static void storage_init() {
-  spdlog::debug("initialize storage");
-
-  const char *dsn = getenv("DATABASE_URL");
-  if (dsn == nullptr) {
-    dsn = "./cagliostr.sqlite";
-  }
-  auto ret = sqlite3_open_v2(dsn, &conn,
-                             SQLITE_OPEN_URI | SQLITE_OPEN_READWRITE |
-                                 SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
-                             nullptr);
-  if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
-    exit(-1);
-  }
-  sqlite3_trace(conn, sqlite3_trace_callback, nullptr);
-
-  const auto sql = R"(
-	CREATE TABLE IF NOT EXISTS event (
-       id text NOT NULL,
-       pubkey text NOT NULL,
-       created_at integer NOT NULL,
-       kind integer NOT NULL,
-       tags jsonb NOT NULL,
-       content text NOT NULL,
-       sig text NOT NULL);
-	CREATE UNIQUE INDEX IF NOT EXISTS ididx ON event(id);
-	CREATE INDEX IF NOT EXISTS pubkeyprefix ON event(pubkey);
-	CREATE INDEX IF NOT EXISTS timeidx ON event(created_at DESC);
-	CREATE INDEX IF NOT EXISTS kindidx ON event(kind);
-	CREATE INDEX IF NOT EXISTS kindtimeidx ON event(kind,created_at DESC);
-    PRAGMA journal_mode = WAL;
-  )";
-  ret = sqlite3_exec(conn, sql, nullptr, nullptr, nullptr);
-  if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
-    exit(-1);
-  }
-}
-
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
   uv_signal_stop(req);
   spdlog::warn("!! SIGINT");
@@ -512,10 +470,43 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
   sqlite3_close_v2(conn);
 }
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[]) {
+using commandtype = std::function<void(
+    const std::string &, std::vector<std::string>::const_iterator,
+    std::vector<std::string>::const_iterator)>;
+
+static std::string dsn() {
+  const char *dsn = getenv("DATABASE_URL");
+  if (dsn == nullptr) {
+    dsn = "./cagliostr.sqlite";
+  }
+  return dsn;
+}
+
+int main(int argc, char *argv[]) {
+  argparse::ArgumentParser program("cagliostr", VERSION);
+  try {
+    program.add_argument("-database")
+        .default_value(dsn())
+        .help("connection string")
+        .metavar("DATABASE")
+        .nargs(1);
+    program.add_argument("-loglevel")
+        .default_value("info")
+        .help("log level")
+        .metavar("LEVEL")
+        .nargs(1);
+    program.parse_args(argc, argv);
+  } catch (const std::exception &err) {
+    std::cerr << err.what() << std::endl;
+    std::cerr << program;
+    return 1;
+  }
+
   spdlog::cfg::load_env_levels();
 
-  storage_init();
+  spdlog::set_level(
+      spdlog::level::from_str(program.get<std::string>("-loglevel")));
+  storage_init(program.get<std::string>("-database"));
 
   loop = uv_default_loop();
   auto server = ws28::Server{loop, nullptr};

@@ -21,7 +21,7 @@ static std::string join(const std::vector<std::string> &v,
   return s;
 }
 
-bool insert_record(event_t &ev) {
+bool insert_record(const event_t &ev) {
   const auto sql =
       R"(INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) VALUES ($1, $2, $3, $4, $5, $6, $7))";
   sqlite3_stmt *stmt = nullptr;
@@ -52,8 +52,8 @@ bool insert_record(event_t &ev) {
   return true;
 }
 
-bool send_records(ws28::Client *client, std::string &sub,
-                  std::vector<filter_t> &filters, bool do_count) {
+bool send_records(ws28::Client *client, const std::string &sub,
+                  const std::vector<filter_t> &filters, bool do_count) {
   auto count = 0;
   for (const auto &filter : filters) {
     std::string sql;
@@ -294,4 +294,45 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
   }
   sqlite3_finalize(stmt);
   return true;
+}
+
+static void sqlite3_trace_callback(void * /*user_data*/,
+                                   const char *statement) {
+  spdlog::debug("{}", statement);
+}
+
+void storage_init(const std::string &dsn) {
+  spdlog::debug("initialize storage");
+
+  auto ret = sqlite3_open_v2(dsn.c_str(), &conn,
+                             SQLITE_OPEN_URI | SQLITE_OPEN_READWRITE |
+                                 SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
+                             nullptr);
+  if (ret != SQLITE_OK) {
+    spdlog::error("{}", sqlite3_errmsg(conn));
+    exit(-1);
+  }
+  sqlite3_trace(conn, sqlite3_trace_callback, nullptr);
+
+  const auto sql = R"(
+	CREATE TABLE IF NOT EXISTS event (
+       id text NOT NULL,
+       pubkey text NOT NULL,
+       created_at integer NOT NULL,
+       kind integer NOT NULL,
+       tags jsonb NOT NULL,
+       content text NOT NULL,
+       sig text NOT NULL);
+	CREATE UNIQUE INDEX IF NOT EXISTS ididx ON event(id);
+	CREATE INDEX IF NOT EXISTS pubkeyprefix ON event(pubkey);
+	CREATE INDEX IF NOT EXISTS timeidx ON event(created_at DESC);
+	CREATE INDEX IF NOT EXISTS kindidx ON event(kind);
+	CREATE INDEX IF NOT EXISTS kindtimeidx ON event(kind,created_at DESC);
+    PRAGMA journal_mode = WAL;
+  )";
+  ret = sqlite3_exec(conn, sql, nullptr, nullptr, nullptr);
+  if (ret != SQLITE_OK) {
+    spdlog::error("{}", sqlite3_errmsg(conn));
+    exit(-1);
+  }
 }

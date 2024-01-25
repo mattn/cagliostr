@@ -21,6 +21,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/deps/libuv-libuv/include
     ${PROJECT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/include
     ${PROJECT_SOURCE_DIR}/deps/gabime-spdlog/include
+    ${PROJECT_SOURCE_DIR}/deps/p-ranav-argparse/include
     )
 
 add_executable(cagliostr main.cxx records.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
