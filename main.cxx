@@ -8,7 +8,7 @@ std::vector<subscriber_t> subscribers;
 sqlite3 *conn = nullptr;
 uv_loop_t *loop = nullptr;
 
-static inline std::string digest2hex(const uint8_t *data) {
+static inline std::string digest2hex(const uint8_t data[32]) {
   std::stringstream ss;
   ss << std::hex;
   for (int i = 0; i < 32; ++i) {
