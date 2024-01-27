@@ -260,11 +260,11 @@ int delete_record_by_kind_and_pubkey_and_dtag(
   }
 
   nlohmann::json data = tag;
+  auto s = "%" + data.dump() + "%";
+  data.clear();
   sqlite3_bind_int(stmt, 1, kind);
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
-  sqlite3_bind_text(stmt, 3, data.dump().data(), (int)data.dump().size(),
-                    nullptr);
-  data.clear();
+  sqlite3_bind_text(stmt, 3, s.data(), (int)s.size(), nullptr);
 
   std::vector<std::string> ids;
   while (true) {
