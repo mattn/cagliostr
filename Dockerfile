@@ -5,7 +5,7 @@ WORKDIR /usr/src/app
 RUN apt update && apt install -y g++ libsqlite3-dev libssl-dev cmake make git
 COPY . /usr/src/app
 RUN git submodule update --init
-RUN mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make
+RUN mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make cagliostr
 FROM debian:bookworm AS build-run
 RUN apt update && apt install -y libsqlite3-0 libssl3 && apt clean
 COPY --link --from=build-dev /usr/src/app/build/cagliostr /usr/bin/cagliostr
