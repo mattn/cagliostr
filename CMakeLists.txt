@@ -5,13 +5,8 @@ include(CheckLibraryExists)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++20 -Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -std=c++20 -Wall -Wextra")
-
-if (CMAKE_COMPILER_IS_GNUCC)
-    set(CMAKE_C_FLAGS_RELEASE "-O2 -std=c++20 -g -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
-    set(CMAKE_C_FLAGS_DEBUG "-g -std=c++20 -Wall -Wno-unused-function ${CMAKE_C_FLAGS}")
-endif()
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++20 -Wall -Wextra ${CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -std=c++20 -Wall -Wextra ${CMAKE_C_FLAGS}")
 
 include_directories(
     cagliostr
@@ -32,7 +27,7 @@ add_custom_command(
     OUTPUT ${LIBUV_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv
     COMMAND sh
-    ARGS -c 'cmake -B build && cmake --build build -t uv_a'
+    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && cmake --build build -t uv_a'
     )
 add_dependencies(cagliostr libuv)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build)
@@ -43,18 +38,22 @@ add_custom_command(
     OUTPUT ${LIBSECP256K1_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1
     COMMAND sh
-    ARGS -c 'cmake -B build  -DBUILD_SHARED_LIBS=off && cmake --build build -t secp256k1'
+    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_SHARED_LIBS=off && cmake --build build -t secp256k1'
     )
 add_dependencies(cagliostr libsecp256k1)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src)
 
-set(LIBSPDLOG_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/libspdlog.a)
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    set(LIBSPDLOG_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/libspdlogd.a)
+else()
+    set(LIBSPDLOG_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/libspdlog.a)
+endif()
 add_custom_target(libspdlog DEPENDS ${LIBSPDLOG_LIBRARIES})
 add_custom_command(
     OUTPUT ${LIBSPDLOG_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog
     COMMAND sh
-    ARGS -c 'cmake -B build  -DBUILD_SHARED_LIBS=off && cmake --build build -t spdlog'
+    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_SHARED_LIBS=off && cmake --build build -t spdlog'
     )
 add_dependencies(cagliostr libspdlog)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build)
