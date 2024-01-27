@@ -285,7 +285,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
       for (const auto &tag : ev.tags) {
         if (tag.size() >= 2 && tag[0] == "e") {
           for (size_t i = 1; i < tag.size(); i++) {
-            if (!delete_record_by_id(tag[i])) {
+            if (delete_record_by_id(tag[i]) < 0) {
               return;
             }
           }
@@ -296,22 +296,22 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
         return;
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
-        if (!delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey)) {
+        if (delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey) < 0) {
           return;
         }
       } else if (30000 <= ev.kind && ev.kind < 40000) {
         std::string d;
         for (const auto &tag : ev.tags) {
           if (tag.size() >= 2 && tag[0] == "d") {
-            if (!delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey,
-                                                           tag)) {
+            if (delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey,
+                                                          tag) < 0) {
               return;
             }
           }
         }
       }
 
-      if (!insert_record(ev)) {
+      if (insert_record(ev) != 1) {
         relay_notice(client, "error: duplicate event");
         return;
       }

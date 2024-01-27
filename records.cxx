@@ -203,13 +203,13 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
   return true;
 }
 
-bool delete_record_by_id(const std::string &id) {
+int delete_record_by_id(const std::string &id) {
   const auto sql = R"(DELETE FROM event WHERE id = ?)";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    return false;
+    return -1;
   }
   sqlite3_bind_text(stmt, 1, id.data(), (int)id.size(), nullptr);
 
@@ -217,20 +217,20 @@ bool delete_record_by_id(const std::string &id) {
   if (ret != SQLITE_DONE) {
     spdlog::error("{}", sqlite3_errmsg(conn));
     sqlite3_finalize(stmt);
-    return false;
+    return -1;
   }
   sqlite3_finalize(stmt);
 
-  return true;
+  return sqlite3_changes(conn);
 }
 
-bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
+int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
   const auto sql = R"(DELETE FROM event WHERE kind = ? AND pubkey = ?)";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    return false;
+    return -1;
   }
   sqlite3_bind_int(stmt, 1, kind);
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
@@ -239,14 +239,14 @@ bool delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
   if (ret != SQLITE_DONE) {
     spdlog::error("{}", sqlite3_errmsg(conn));
     sqlite3_finalize(stmt);
-    return false;
+    return -1;
   }
   sqlite3_finalize(stmt);
 
-  return true;
+  return sqlite3_changes(conn);
 }
 
-bool delete_record_by_kind_and_pubkey_and_dtag(
+int delete_record_by_kind_and_pubkey_and_dtag(
     int kind, const std::string &pubkey, const std::vector<std::string> &tag) {
   std::string sql =
       R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ?)";
@@ -256,7 +256,7 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
       sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    return false;
+    return -1;
   }
 
   nlohmann::json data = tag;
@@ -277,7 +277,7 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
   sqlite3_finalize(stmt);
 
   if (ids.empty()) {
-    return true;
+    return 0;
   }
 
   std::ostringstream os;
@@ -292,7 +292,7 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
   ret = sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
     spdlog::error("{}", sqlite3_errmsg(conn));
-    return false;
+    return -1;
   }
   for (size_t i = 0; i < ids.size(); i++) {
     sqlite3_bind_text(stmt, i + 1, ids[i].data(), (int)ids[i].size(), nullptr);
@@ -302,10 +302,11 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
   if (ret != SQLITE_DONE) {
     spdlog::error("{}", sqlite3_errmsg(conn));
     sqlite3_finalize(stmt);
-    return false;
+    return -1;
   }
   sqlite3_finalize(stmt);
-  return true;
+
+  return sqlite3_changes(conn);
 }
 
 static void sqlite3_trace_callback(void * /*user_data*/,
