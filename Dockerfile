@@ -7,8 +7,8 @@ COPY . /usr/src/app
 RUN git submodule update --init
 RUN mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make
 FROM debian:bookworm AS build-run
-RUN apt update && apt install -y libsqlite3-0 libssl3
+RUN apt update && apt install -y libsqlite3-0 libssl3 && apt clean
 COPY --link --from=build-dev /usr/src/app/build/cagliostr /usr/bin/cagliostr
 COPY --from=build-dev /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 RUN mkdir /data
-CMD ["/usr/bin/cagliostr"]
+ENTRYPOINT ["/usr/bin/cagliostr"]
