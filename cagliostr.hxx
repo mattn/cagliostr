@@ -7,13 +7,7 @@
 #include <sstream>
 #include <string>
 
-#include <libbech32/bech32.h>
 #include <nlohmann/json.hpp>
-
-#include <spdlog/cfg/env.h>
-#include <spdlog/spdlog.h>
-
-#include <Server.h>
 
 #include "version.h"
 
@@ -38,12 +32,6 @@ typedef struct filter_t {
   std::string search;
 } filter_t;
 
-typedef struct subscriber_t {
-  std::string sub;
-  ws28::Client *client{};
-  std::vector<filter_t> filters;
-} subscriber_t;
-
 void storage_init(const std::string &);
 void storage_deinit();
 bool insert_record(const event_t &);
@@ -55,6 +43,8 @@ int delete_record_by_kind_and_pubkey_and_dtag(int, const std::string &,
 
 bool send_records(std::function<void(const nlohmann::json &)>,
                   const std::string &, const std::vector<filter_t> &, bool);
-void relay_send(ws28::Client *, const nlohmann::json &);
+
+bool signature_verify(const std::vector<uint8_t> &,
+                      const std::vector<uint8_t> &, const uint8_t[32]);
 
 #endif

@@ -4,6 +4,10 @@
 #undef ok
 #define CAGLIOSTR_TEST
 #include "cagliostr.hxx"
+
+#include "spdlog/common.h"
+#include "spdlog/spdlog.h"
+
 #include <filesystem>
 
 static event_t string2event(auto &string) {

@@ -1,13 +1,16 @@
 #include "cagliostr.hxx"
+#include <Server.h>
 
 #include "spdlog/common.h"
 #include "spdlog/spdlog.h"
+#include "spdlog/cfg/env.h"
 #include <argparse/argparse.hpp>
 
-#include <openssl/evp.h>
-
-#include <secp256k1.h>
-#include <secp256k1_schnorrsig.h>
+typedef struct subscriber_t {
+  std::string sub;
+  ws28::Client *client{};
+  std::vector<filter_t> filters;
+} subscriber_t;
 
 // global variables
 std::vector<subscriber_t> subscribers;
@@ -32,7 +35,7 @@ static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
   return bytes;
 }
 
-void relay_send(ws28::Client *client, const nlohmann::json &data) {
+static void relay_send(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
   auto s = data.dump();
   spdlog::debug("{} << {}", client->GetIP(), s);
@@ -50,27 +53,6 @@ static inline void relay_notice(ws28::Client *client, const std::string &id,
   assert(client);
   nlohmann::json data = {"NOTICE", id, msg};
   relay_send(client, data);
-}
-
-static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
-                             const std::vector<uint8_t> &bytes_pub,
-                             const uint8_t digest[32]) {
-#define secp256k1_context_flags                                                \
-  (SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY)
-  secp256k1_context *ctx = secp256k1_context_create(secp256k1_context_flags);
-  secp256k1_xonly_pubkey pub;
-  if (!secp256k1_xonly_pubkey_parse(ctx, &pub, bytes_pub.data())) {
-    secp256k1_context_destroy(ctx);
-    return false;
-  }
-
-  auto result = secp256k1_schnorrsig_verify(ctx, bytes_sig.data(), digest,
-#ifdef SECP256K1_SCHNORRSIG_EXTRAPARAMS_INIT
-                                            32,
-#endif
-                                            &pub);
-  secp256k1_context_destroy(ctx);
-  return result;
 }
 
 static void make_filter(filter_t &filter, nlohmann::json &data) {

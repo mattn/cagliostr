@@ -3,6 +3,9 @@
 
 #include <sqlite3.h>
 
+#include "spdlog/common.h"
+#include "spdlog/spdlog.h"
+
 // global variables
 sqlite3 *conn = nullptr;
 

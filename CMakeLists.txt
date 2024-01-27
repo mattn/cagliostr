@@ -76,7 +76,7 @@ target_link_libraries(${t_} INTERFACE ${LIBSPDLOG_LIBRARIES})
 #--------------------------------------------------
 # cagliostr
 set (t_ cagliostr)
-add_executable(${t_} main.cxx records.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
+add_executable(${t_} main.cxx records.cxx sign.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
 target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 #--------------------------------------------------
