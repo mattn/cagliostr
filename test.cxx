@@ -70,9 +70,22 @@ static void test_cagliostr_records() {
   storage_deinit();
 }
 
+static void test_cagliostr_sign() {
+  event_t ev;
+
+  ev = string2event(
+      R"({"id":"bb97556f36930838b8593b9e3dd130182e77f34ddf6c8e351b41b1753dc2580a","pubkey":"2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc","created_at":1706278266,"kind":1,"tags":[["r","https://image.nostr.build/9b882abc8183d79fdda4c5278228a5f1641b78fa457e643532c5e1c2d89ae6f9.jpg#m=image%2Fjpeg\u0026dim=1067x1920\u0026blurhash=%5DN9%25MXON%5EnotWSf5jcWAo4WAk9t8kBogofM_WFR%25WBjvR%24s%3Bjrj%3FogRiahRjWBa%23WTj%5DWUa%7DfRRjWERjWBWVR%25ahWBWBjb\u0026x=fdde40d498de759392222679f0a1166c9d4b4012bc815be385aa3e9bd1a225ed"]],"content":"mattn いすぎじゃない？\nhttps://image.nostr.build/9b882abc8183d79fdda4c5278228a5f1641b78fa457e643532c5e1c2d89ae6f9.jpg#m=image%2Fjpeg\u0026dim=1067x1920\u0026blurhash=%5DN9%25MXON%5EnotWSf5jcWAo4WAk9t8kBogofM_WFR%25WBjvR%24s%3Bjrj%3FogRiahRjWBa%23WTj%5DWUa%7DfRRjWERjWBWVR%25ahWBWBjb\u0026x=fdde40d498de759392222679f0a1166c9d4b4012bc815be385aa3e9bd1a225ed","sig":"757a1864233031b013eef28b4e47e16bfe15055e5488735f869270f4488875aad56399fc2b28468617470698b586ddeff5261e7dc386178817d2ce0d6ea36301"})");
+
+  _ok(check_event(ev), "check_event should be succeeded for valid sig");
+
+  ev.sig = "757a1864233031b013eef28b4e47e16bfe15055e5488735f869270f4488875aad56399fc2b28468617470698b586ddeff5261e7dc386178817d2ce0d6ea36302";
+  _ok(!check_event(ev), "check_event should be failed for invalid sig");
+}
+
 int main() {
   spdlog::set_level(spdlog::level::off);
 
   subtest("test_cagliostr_records", test_cagliostr_records);
+  subtest("test_cagliostr_sign", test_cagliostr_sign);
   return done_testing();
 }

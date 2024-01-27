@@ -5,7 +5,26 @@
 #include <secp256k1.h>
 #include <secp256k1_schnorrsig.h>
 
-bool signature_verify(const std::vector<uint8_t> &bytes_sig,
+static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
+  std::vector<uint8_t> bytes;
+  for (unsigned int i = 0; i < hex.length(); i += 2) {
+    std::string s = hex.substr(i, 2);
+    auto byte = (uint8_t)strtol(s.c_str(), nullptr, 16);
+    bytes.push_back(byte);
+  }
+  return bytes;
+}
+
+static inline std::string digest2hex(const uint8_t data[32]) {
+  std::stringstream ss;
+  ss << std::hex;
+  for (int i = 0; i < 32; ++i) {
+    ss << std::setw(2) << std::setfill('0') << (int)data[i];
+  }
+  return ss.str();
+}
+
+static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
                              const std::vector<uint8_t> &bytes_pub,
                              const uint8_t digest[32]) {
 #define secp256k1_context_flags                                                \
@@ -24,4 +43,26 @@ bool signature_verify(const std::vector<uint8_t> &bytes_sig,
                                             &pub);
   secp256k1_context_destroy(ctx);
   return result;
+}
+
+bool check_event(const event_t &ev) {
+  nlohmann::json check = {0,       ev.pubkey, ev.created_at,
+                          ev.kind, ev.tags,   ev.content};
+  auto dump = check.dump();
+  check.clear();
+
+  uint8_t digest[32] = {0};
+  EVP_Digest(dump.data(), dump.size(), digest, nullptr, EVP_sha256(), nullptr);
+
+  auto id = digest2hex(digest);
+  if (id != ev.id) {
+    return false;
+  }
+
+  auto bytes_sig = hex2bytes(ev.sig);
+  auto bytes_pub = hex2bytes(ev.pubkey);
+  if (!signature_verify(bytes_sig, bytes_pub, digest)) {
+    return false;
+  }
+  return true;
 }

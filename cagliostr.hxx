@@ -44,7 +44,6 @@ int delete_record_by_kind_and_pubkey_and_dtag(int, const std::string &,
 bool send_records(std::function<void(const nlohmann::json &)>,
                   const std::string &, const std::vector<filter_t> &, bool);
 
-bool signature_verify(const std::vector<uint8_t> &,
-                      const std::vector<uint8_t> &, const uint8_t[32]);
+bool check_event(const event_t &);
 
 #endif

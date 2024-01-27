@@ -86,7 +86,7 @@ include_directories(
     ${t_}
     ${PROJECT_SOURCE_DIR}/deps/h2o-picotest
 )
-add_executable(${t_} test.cxx ${PROJECT_SOURCE_DIR}/deps/h2o-picotest/picotest.c records.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
+add_executable(${t_} test.cxx ${PROJECT_SOURCE_DIR}/deps/h2o-picotest/picotest.c records.cxx sign.cxx)
 target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 enable_testing()
