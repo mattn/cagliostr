@@ -13,8 +13,9 @@ static std::string join(const std::vector<std::string> &v,
   if (!v.empty()) {
     s += v[0];
     for (decltype(v.size()) i = 1, c = v.size(); i < c; ++i) {
-      if (delim)
+      if (delim) {
         s += delim;
+      }
       s += v[i];
     }
   }
@@ -54,6 +55,7 @@ bool insert_record(const event_t &ev) {
 
 bool send_records(ws28::Client *client, const std::string &sub,
                   const std::vector<filter_t> &filters, bool do_count) {
+  assert(client);
   auto count = 0;
   for (const auto &filter : filters) {
     std::string sql;
@@ -303,6 +305,7 @@ bool delete_record_by_kind_and_pubkey_and_dtag(
 
 static void sqlite3_trace_callback(void * /*user_data*/,
                                    const char *statement) {
+  assert(statement);
   spdlog::debug("{}", statement);
 }
 

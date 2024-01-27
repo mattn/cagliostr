@@ -28,25 +28,28 @@ static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
 }
 
 void relay_send(ws28::Client *client, const nlohmann::json &data) {
+  assert(client);
   auto s = data.dump();
   spdlog::debug("{} << {}", client->GetIP(), s);
   client->Send(s.data(), s.size(), 1);
 }
 
 static inline void relay_notice(ws28::Client *client, const std::string &msg) {
+  assert(client);
   nlohmann::json data = {"NOTICE", msg};
   relay_send(client, data);
 }
 
 static inline void relay_notice(ws28::Client *client, const std::string &id,
                                 const std::string &msg) {
+  assert(client);
   nlohmann::json data = {"NOTICE", id, msg};
   relay_send(client, data);
 }
 
 static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
                              const std::vector<uint8_t> &bytes_pub,
-                             const uint8_t *digest) {
+                             const uint8_t digest[32]) {
 #define secp256k1_context_flags                                                \
   (SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY)
   secp256k1_context *ctx = secp256k1_context_create(secp256k1_context_flags);
@@ -105,6 +108,7 @@ static void make_filter(filter_t &filter, nlohmann::json &data) {
 }
 
 static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
+  assert(client);
   std::string sub = data[1];
   std::vector<filter_t> filters;
   for (size_t i = 2; i < data.size(); i++) {
@@ -133,6 +137,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
 }
 
 static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
+  assert(client);
   std::string sub = data[1];
   std::vector<filter_t> filters;
   for (size_t i = 2; i < data.size(); i++) {
@@ -158,6 +163,7 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
 }
 
 static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
+  assert(client);
   std::string sub = data[1];
   auto it = subscribers.begin();
   while (it != subscribers.end()) {
@@ -229,9 +235,9 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   return found;
 }
 
-static bool check_event(const event_t& ev) {
+static bool check_event(const event_t &ev) {
   nlohmann::json check = {0,       ev.pubkey, ev.created_at,
-                                ev.kind, ev.tags,   ev.content};
+                          ev.kind, ev.tags,   ev.content};
   auto dump = check.dump();
   check.clear();
 
@@ -290,7 +296,8 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
         std::string d;
         for (const auto &tag : ev.tags) {
           if (tag.size() >= 2 && tag[0] == "d") {
-            if (!delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey, tag)) {
+            if (!delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey,
+                                                           tag)) {
               return;
             }
           }
@@ -316,10 +323,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
   }
 }
 
-static void http_request_callback(ws28::HTTPRequest &req,
-                                  ws28::HTTPResponse &resp) {
-  const static auto nip11 = R"(
-{
+const static auto nip11 = R"({
   "name": "cagliostr",
   "description": "nostr relay written in C++",
   "pubkey": "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc",
@@ -357,9 +361,10 @@ static void http_request_callback(ws28::HTTPRequest &req,
   },
   "fees": {},
   "icon": "https://mattn.github.io/assets/image/mattn-mohawk.webp"
-}
-      )";
+})";
 
+static void http_request_callback(ws28::HTTPRequest &req,
+                                  ws28::HTTPResponse &resp) {
   resp.header("Access-Control-Allow-Origin", "*");
   if (req.method == "GET") {
     auto accept = req.headers.Get("accept");
@@ -397,6 +402,7 @@ static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
 }
 
 static void disconnect_callback(ws28::Client *client) {
+  assert(client);
   spdlog::debug("DISCONNECT {}", client->GetIP());
   auto it = subscribers.begin();
   while (it != subscribers.end()) {
@@ -415,6 +421,8 @@ static inline bool check_method(std::string &method) {
 
 static void data_callback(ws28::Client *client, char *data, size_t len,
                           int /*opcode*/) {
+  assert(client);
+  assert(data);
   std::string s(data, len);
   spdlog::debug("{} >> {}", client->GetIP(), s);
   try {
@@ -462,6 +470,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
 }
 
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
+  assert(req);
   uv_signal_stop(req);
   spdlog::warn("!! SIGINT");
   for (auto &s : subscribers) {
@@ -478,6 +487,8 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
 }
 
 static std::string env(const char *name, const char *defvalue) {
+  assert(name);
+  assert(defvalue);
   const char *value = getenv(name);
   if (value == nullptr) {
     value = defvalue;
