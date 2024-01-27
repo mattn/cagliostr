@@ -1,6 +1,11 @@
 #include "cagliostr.hxx"
 #include <sstream>
 
+#include <sqlite3.h>
+
+// global variables
+sqlite3 *conn = nullptr;
+
 typedef struct param_t {
   int t{};
   int n{};
@@ -53,9 +58,9 @@ bool insert_record(const event_t &ev) {
   return true;
 }
 
-bool send_records(ws28::Client *client, const std::string &sub,
-                  const std::vector<filter_t> &filters, bool do_count) {
-  assert(client);
+bool send_records(std::function<void(const nlohmann::json &)> sender,
+                  const std::string &sub, const std::vector<filter_t> &filters,
+                  bool do_count) {
   auto count = 0;
   for (const auto &filter : filters) {
     std::string sql;
@@ -183,7 +188,7 @@ bool send_records(ws28::Client *client, const std::string &sub,
         ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
 
         nlohmann::json reply = {"EVENT", sub, ej};
-        relay_send(client, reply);
+        sender(reply);
       }
       sqlite3_finalize(stmt);
     }
@@ -193,7 +198,7 @@ bool send_records(ws28::Client *client, const std::string &sub,
     nlohmann::json cc;
     cc["count"] = count;
     nlohmann::json reply = {"COUNT", sub, cc};
-    relay_send(client, reply);
+    sender(reply);
   }
   return true;
 }
@@ -344,3 +349,5 @@ void storage_init(const std::string &dsn) {
     exit(-1);
   }
 }
+
+void storage_deinit() { sqlite3_close_v2(conn); }

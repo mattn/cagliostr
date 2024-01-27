@@ -25,3 +25,6 @@
 [submodule "deps/p-ranav-argparse"]
 	path = deps/p-ranav-argparse
 	url = https://github.com/p-ranav/argparse
+[submodule "deps/h2o-picotest"]
+	path = deps/h2o-picotest
+	url = https://github.com/h2o/picotest

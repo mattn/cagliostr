@@ -13,3 +13,5 @@ deps/libuv-libuv/include
 deps/gabime-spdlog/include
 -I
 deps/p-ranav-argparse/include
+-I
+deps/h2o-picotest

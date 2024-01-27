@@ -1,11 +1,16 @@
 #include "cagliostr.hxx"
+
 #include "spdlog/common.h"
 #include "spdlog/spdlog.h"
 #include <argparse/argparse.hpp>
 
+#include <openssl/evp.h>
+
+#include <secp256k1.h>
+#include <secp256k1_schnorrsig.h>
+
 // global variables
 std::vector<subscriber_t> subscribers;
-sqlite3 *conn = nullptr;
 uv_loop_t *loop = nullptr;
 
 static inline std::string digest2hex(const uint8_t data[32]) {
@@ -131,7 +136,8 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
   }
   subscribers.push_back({.sub = sub, .client = client, .filters = filters});
 
-  send_records(client, sub, filters, false);
+  send_records([&](const nlohmann::json &data) { relay_send(client, data); },
+               sub, filters, false);
   auto reply = nlohmann::json::array({"EOSE", sub});
   relay_send(client, reply);
 }
@@ -159,7 +165,8 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
     return;
   }
 
-  send_records(client, sub, filters, true);
+  send_records([&](const nlohmann::json &data) { relay_send(client, data); },
+               sub, filters, true);
 }
 
 static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
@@ -323,7 +330,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
   }
 }
 
-const static auto nip11 = R"({
+static auto nip11 = R"({
   "name": "cagliostr",
   "description": "nostr relay written in C++",
   "pubkey": "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc",
@@ -361,7 +368,7 @@ const static auto nip11 = R"({
   },
   "fees": {},
   "icon": "https://mattn.github.io/assets/image/mattn-mohawk.webp"
-})";
+})"_json;
 
 static void http_request_callback(ws28::HTTPRequest &req,
                                   ws28::HTTPResponse &resp) {
@@ -371,9 +378,7 @@ static void http_request_callback(ws28::HTTPRequest &req,
     if (accept.has_value() && accept.value() == "application/nostr+json") {
       resp.status(200);
       resp.header("content-type", "application/json; charset=UTF-8");
-      auto data = nlohmann::json::parse(nip11);
-      data["version"] = VERSION;
-      resp.send(data.dump());
+      resp.send(nip11.dump());
     } else if (req.path == "/") {
       resp.status(200);
       resp.header("content-type", "text/html; charset=UTF-8");
@@ -483,7 +488,7 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
     s.client = nullptr;
   }
   uv_stop(loop);
-  sqlite3_close_v2(conn);
+  storage_deinit();
 }
 
 static std::string env(const char *name, const char *defvalue) {
@@ -521,6 +526,8 @@ int main(int argc, char *argv[]) {
   spdlog::set_level(
       spdlog::level::from_str(program.get<std::string>("-loglevel")));
   storage_init(program.get<std::string>("-database"));
+
+  nip11["version"] = VERSION;
 
   loop = uv_default_loop();
   auto server = ws28::Server{loop, nullptr};

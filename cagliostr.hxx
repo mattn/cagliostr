@@ -7,14 +7,8 @@
 #include <sstream>
 #include <string>
 
-#include <sqlite3.h>
-
 #include <libbech32/bech32.h>
 #include <nlohmann/json.hpp>
-#include <openssl/evp.h>
-
-#include <secp256k1.h>
-#include <secp256k1_schnorrsig.h>
 
 #include <spdlog/cfg/env.h>
 #include <spdlog/spdlog.h>
@@ -50,14 +44,17 @@ typedef struct subscriber_t {
   std::vector<filter_t> filters;
 } subscriber_t;
 
-extern sqlite3 *conn;
-
-void storage_init(const std::string&);
+void storage_init(const std::string &);
+void storage_deinit();
 bool insert_record(const event_t &);
-bool send_records(ws28::Client *, const std::string &, const std::vector<filter_t> &, bool);
+
+bool send_records(std::function<void(const nlohmann::json &)>,
+                  const std::string &, const std::vector<filter_t> &, bool);
+
 void relay_send(ws28::Client *, const nlohmann::json &);
 bool delete_record_by_id(const std::string &);
 bool delete_record_by_kind_and_pubkey(int, const std::string &);
-bool delete_record_by_kind_and_pubkey_and_dtag(int, const std::string &, const std::vector<std::string>&);
+bool delete_record_by_kind_and_pubkey_and_dtag(
+    int, const std::string &, const std::vector<std::string> &);
 
 #endif
