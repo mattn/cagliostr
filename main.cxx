@@ -1,9 +1,9 @@
 #include "cagliostr.hxx"
 #include <Server.h>
 
+#include "spdlog/cfg/env.h"
 #include "spdlog/common.h"
 #include "spdlog/spdlog.h"
-#include "spdlog/cfg/env.h"
 #include <argparse/argparse.hpp>
 
 typedef struct subscriber_t {
@@ -276,22 +276,7 @@ static auto nip11 = R"({
   "description": "nostr relay written in C++",
   "pubkey": "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc",
   "contact": "mattn.jp@gmail.com",
-  "supported_nips": [
-    1,
-    2,
-    4,
-    9,
-    11,
-    12,
-    15,
-    16,
-    20,
-    22,
-    33,
-    42,
-    45,
-    50
-  ],
+  "supported_nips": [1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 33, 42, 45, 50],
   "software": "https://github.com/mattn/cagliostr",
   "version": "develop",
   "limitation": {
@@ -442,6 +427,25 @@ static std::string env(const char *name, const char *defvalue) {
   return value;
 }
 
+static void server(short port) {
+  loop = uv_default_loop();
+  auto server = ws28::Server{loop, nullptr};
+  server.SetClientDataCallback(data_callback);
+  server.SetClientConnectedCallback(connect_callback);
+  server.SetClientDisconnectedCallback(disconnect_callback);
+  server.SetCheckTCPConnectionCallback(tcpcheck_callback);
+  server.SetMaxMessageSize(65535);
+  server.SetCheckConnectionCallback(check_callback);
+  server.SetHTTPCallback(http_request_callback);
+  server.Listen(port);
+  spdlog::info("server started :{}", port);
+
+  uv_signal_t sig;
+  uv_signal_init(loop, &sig);
+  uv_signal_start(&sig, signal_handler, SIGINT);
+  uv_run(loop, UV_RUN_DEFAULT);
+}
+
 int main(int argc, char *argv[]) {
   argparse::ArgumentParser program("cagliostr", VERSION);
   try {
@@ -455,6 +459,12 @@ int main(int argc, char *argv[]) {
         .help("log level")
         .metavar("LEVEL")
         .nargs(1);
+    program.add_argument("-port")
+        .default_value((short)7447)
+        .help("port number")
+        .metavar("PORT")
+        .scan<'i', short>()
+        .nargs(1);
     program.parse_args(argc, argv);
   } catch (const std::exception &err) {
     std::cerr << err.what() << std::endl;
@@ -462,29 +472,13 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  spdlog::cfg::load_env_levels();
+  nip11["version"] = VERSION;
 
+  spdlog::cfg::load_env_levels();
   spdlog::set_level(
       spdlog::level::from_str(program.get<std::string>("-loglevel")));
   storage_init(program.get<std::string>("-database"));
 
-  nip11["version"] = VERSION;
-
-  loop = uv_default_loop();
-  auto server = ws28::Server{loop, nullptr};
-  server.SetClientDataCallback(data_callback);
-  server.SetClientConnectedCallback(connect_callback);
-  server.SetClientDisconnectedCallback(disconnect_callback);
-  server.SetCheckTCPConnectionCallback(tcpcheck_callback);
-  server.SetMaxMessageSize(65535);
-  server.SetCheckConnectionCallback(check_callback);
-  server.SetHTTPCallback(http_request_callback);
-  server.Listen(7447);
-  spdlog::info("server started :7447");
-
-  uv_signal_t sig;
-  uv_signal_init(loop, &sig);
-  uv_signal_start(&sig, signal_handler, SIGINT);
-  uv_run(loop, UV_RUN_DEFAULT);
+  server(program.get<short>("-port"));
   return 0;
 }
