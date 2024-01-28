@@ -1,4 +1,5 @@
 #include "cagliostr.hxx"
+#include "version.h"
 #include <Server.h>
 
 #include "spdlog/cfg/env.h"
@@ -417,12 +418,12 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
   storage_deinit();
 }
 
-static std::string env(const char *name, const char *defvalue) {
+static std::string env(const char *name, const char *default_value) {
   assert(name);
-  assert(defvalue);
-  const char *value = getenv(name);
+  assert(default_value);
+  const char *value = std::getenv(name);
   if (value == nullptr) {
-    value = defvalue;
+    value = default_value;
   }
   return value;
 }

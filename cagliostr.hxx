@@ -9,8 +9,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include "version.h"
-
 typedef struct event_t {
   std::string id;
   std::string pubkey;
