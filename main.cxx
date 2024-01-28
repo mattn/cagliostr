@@ -15,7 +15,6 @@ typedef struct subscriber_t {
 
 // global variables
 std::vector<subscriber_t> subscribers;
-uv_loop_t *loop = nullptr;
 
 static void relay_send(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
@@ -360,7 +359,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   try {
     auto payload = nlohmann::json::parse(s);
 
-    if (!payload.is_array() || payload.size() < 2) {
+    if (!payload.is_array() || payload.size() < 2 || !payload[0].is_string()) {
       relay_notice(client, "error: invalid request");
       return;
     }
@@ -414,7 +413,7 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
     s.client->Destroy();
     s.client = nullptr;
   }
-  uv_stop(loop);
+  uv_stop(req->loop);
   storage_deinit();
 }
 
@@ -429,7 +428,7 @@ static std::string env(const char *name, const char *default_value) {
 }
 
 static void server(short port) {
-  loop = uv_default_loop();
+  uv_loop_t *loop = uv_default_loop();
   auto server = ws28::Server{loop, nullptr};
   server.SetClientDataCallback(data_callback);
   server.SetClientConnectedCallback(connect_callback);
