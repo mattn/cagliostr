@@ -36,14 +36,31 @@ static inline void relay_notice(ws28::Client *client, const std::string &id,
   relay_send(client, data);
 }
 
-static void make_filter(filter_t &filter, nlohmann::json &data) {
+static bool is_hex(const std::string &s, size_t len) {
+  const static std::string hex = "0123456789abcdef";
+  if (s.size() != len) {
+    return false;
+  }
+  for (const auto &c : s) {
+    if (hex.find(c) == std::string::npos) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool make_filter(filter_t &filter, nlohmann::json &data) {
   if (data.count("ids") > 0) {
     for (const auto &id : data["ids"]) {
+      if (!is_hex(id, 64))
+        return false;
       filter.ids.push_back(id);
     }
   }
   if (data.count("authors") > 0) {
     for (const auto &author : data["authors"]) {
+      if (!is_hex(author, 64))
+        return false;
       filter.authors.push_back(author);
     }
   }
@@ -73,6 +90,7 @@ static void make_filter(filter_t &filter, nlohmann::json &data) {
   if (data.count("search") > 0) {
     filter.search = data["search"];
   }
+  return true;
 }
 
 static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
@@ -85,7 +103,9 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     }
     try {
       filter_t filter;
-      make_filter(filter, data[i]);
+      if (!make_filter(filter, data[i])) {
+        continue;
+      }
       filters.push_back(filter);
     } catch (std::exception &e) {
       spdlog::warn("!! {}", e.what());
@@ -111,11 +131,15 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
   std::vector<filter_t> filters;
   for (size_t i = 2; i < data.size(); i++) {
     if (!data[i].is_object()) {
-      continue;
+      filters.clear();
+      break;
     }
     try {
       filter_t filter;
-      make_filter(filter, data[i]);
+      if (!make_filter(filter, data[i])) {
+        filters.clear();
+        break;
+      }
       filters.push_back(filter);
     } catch (std::exception &e) {
       spdlog::warn("!! {}", e.what());
