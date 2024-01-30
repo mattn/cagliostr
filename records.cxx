@@ -61,6 +61,17 @@ bool insert_record(const event_t &ev) {
   return true;
 }
 
+static std::string escape(const std::string &data) {
+  std::string result;
+  for (const auto c : data) {
+    if (c == '%') {
+      result.push_back('%');
+    }
+    result.push_back(c);
+  }
+  return result;
+}
+
 bool send_records(std::function<void(const nlohmann::json &)> sender,
                   const std::string &sub, const std::vector<filter_t> &filters,
                   bool do_count) {
@@ -78,25 +89,37 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     std::vector<param_t> params;
     std::vector<std::string> conditions;
     if (!filter.ids.empty()) {
-      std::vector<std::string> match;
-      for (const auto &id : filter.ids) {
-        params.push_back({.t = 1, .s = id + "%"});
-        match.push_back("id LIKE ?");
+      if (filter.ids.size() == 1) {
+        conditions.push_back("id = ?");
+        params.push_back({.t = 0, .s = filter.ids.front()});
+      } else {
+        std::string condition;
+        for (const auto &id : filter.ids) {
+          condition += "?,";
+          params.push_back({.t = 1, .s = id});
+        }
+        condition.pop_back();
+        conditions.push_back("id in (" + condition + ")");
       }
-      conditions.push_back("(" + join(match, " OR ") + ")");
     }
     if (!filter.authors.empty()) {
-      std::vector<std::string> match;
-      for (const auto &author : filter.authors) {
-        params.push_back({.t = 1, .s = author + "%"});
-        match.push_back("pubkey LIKE ?");
+      if (filter.authors.size() == 1) {
+        conditions.push_back("pubkey = ?");
+        params.push_back({.t = 0, .s = filter.authors.front()});
+      } else {
+        std::string condition;
+        for (const auto &author : filter.authors) {
+          condition += "?,";
+          params.push_back({.t = 1, .s = author});
+        }
+        condition.pop_back();
+        conditions.push_back("pubkey in (" + condition + ")");
       }
-      conditions.push_back("(" + join(match, " OR ") + ")");
     }
     if (!filter.kinds.empty()) {
       if (filter.kinds.size() == 1) {
-        params.push_back({.t = 0, .n = filter.kinds.front()});
         conditions.push_back("kind = ?");
+        params.push_back({.t = 0, .n = filter.kinds.front()});
       } else {
         std::string condition;
         for (const auto &kind : filter.kinds) {
@@ -116,11 +139,15 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
         auto first = tag[0];
         for (size_t i = 1; i < tag.size(); i++) {
           nlohmann::json data = {first, tag[i]};
-          params.push_back({.t = 1, .s = "%" + data.dump() + "%"});
+          params.push_back({.t = 1, .s = "%" + escape(data.dump()) + "%"});
           match.push_back("tags LIKE ?");
         }
       }
-      conditions.push_back("(" + join(match, " OR ") + ")");
+      if (match.size() == 1) {
+        conditions.push_back(match.front());
+      } else {
+        conditions.push_back("(" + join(match, " OR ") + ")");
+      }
     }
     if (filter.since != 0) {
       std::ostringstream os;
@@ -136,7 +163,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.push_back({.t = 1, .s = "%" + filter.search + "%"});
+      params.push_back({.t = 1, .s = "%" + escape(filter.search) + "%"});
       conditions.push_back("content LIKE ?");
     }
     if (!conditions.empty()) {
