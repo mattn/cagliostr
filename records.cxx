@@ -140,7 +140,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
         for (size_t i = 1; i < tag.size(); i++) {
           nlohmann::json data = {first, tag[i]};
           params.push_back({.t = 1, .s = "%" + escape(data.dump()) + "%"});
-          match.push_back("tags LIKE ?");
+          match.push_back(R"(tags LIKE ? ESCAPE '\')");
         }
       }
       if (match.size() == 1) {
@@ -164,7 +164,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     }
     if (!filter.search.empty()) {
       params.push_back({.t = 1, .s = "%" + escape(filter.search) + "%"});
-      conditions.push_back("content LIKE ?");
+      conditions.push_back(R"(content LIKE ? ESCAPE '\')");
     }
     if (!conditions.empty()) {
       sql += " WHERE " + join(conditions, " AND ");
