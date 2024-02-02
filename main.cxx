@@ -317,7 +317,7 @@ static auto nip11 = R"({
     "restricted_writes": false
   },
   "fees": {},
-  "icon": "https://mattn.github.io/assets/image/mattn-mohawk.webp"
+  "icon": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/Alessandro_Cagliostro.jpg/800px-Alessandro_Cagliostro.jpg"
 })"_json;
 
 static void http_request_callback(ws28::HTTPRequest &req,
