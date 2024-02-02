@@ -295,6 +295,31 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
   }
 }
 
+static auto html = R"(
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>Cagliostr</title>
+<style>
+#content {
+  margin: 50vh auto 0;
+  transform: translateY(-50%);
+  padding: 15px 30px;
+  text-align: center;
+  font-size: 2em;
+}
+</style>
+</head>
+<body>
+<div id="content">
+<p>Cagliostr the Nostr relay server</p>
+<p><img src="https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png" /></p>
+</div>
+</body>
+</html>
+)";
+
 static auto nip11 = R"({
   "name": "cagliostr",
   "description": "nostr relay written in C++",
@@ -333,7 +358,7 @@ static void http_request_callback(ws28::HTTPRequest &req,
     } else if (req.path == "/") {
       resp.status(200);
       resp.header("content-type", "text/html; charset=UTF-8");
-      resp.send("Cagliostr\n");
+      resp.send(html);
     } else {
       resp.status(404);
       resp.header("content-type", "text/html; charset=UTF-8");
