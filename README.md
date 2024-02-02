@@ -2,6 +2,8 @@
 
 High performance Nostr Relay written in C++
 
+![cagliostr](cagliostr.png)
+
 ## Usage
 
 ```
