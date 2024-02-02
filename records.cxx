@@ -91,7 +91,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (!filter.ids.empty()) {
       if (filter.ids.size() == 1) {
         conditions.push_back("id = ?");
-        params.push_back({.t = 0, .s = filter.ids.front()});
+        params.push_back({.t = 1, .s = filter.ids.front()});
       } else {
         std::string condition;
         for (const auto &id : filter.ids) {
@@ -105,7 +105,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (!filter.authors.empty()) {
       if (filter.authors.size() == 1) {
         conditions.push_back("pubkey = ?");
-        params.push_back({.t = 0, .s = filter.authors.front()});
+        params.push_back({.t = 1, .s = filter.authors.front()});
       } else {
         std::string condition;
         for (const auto &author : filter.authors) {
