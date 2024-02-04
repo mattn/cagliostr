@@ -9,6 +9,9 @@
 // global variables
 sqlite3 *conn = nullptr;
 
+#define PARAM_TYPE_NUMBER (0)
+#define PARAM_TYPE_STRING (1)
+
 typedef struct param_t {
   int t{};
   int n{};
@@ -91,12 +94,12 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (!filter.ids.empty()) {
       if (filter.ids.size() == 1) {
         conditions.push_back("id = ?");
-        params.push_back({.t = 1, .s = filter.ids.front()});
+        params.push_back({.t = PARAM_TYPE_STRING, .s = filter.ids.front()});
       } else {
         std::string condition;
         for (const auto &id : filter.ids) {
           condition += "?,";
-          params.push_back({.t = 1, .s = id});
+          params.push_back({.t = PARAM_TYPE_STRING, .s = id});
         }
         condition.pop_back();
         conditions.push_back("id in (" + condition + ")");
@@ -105,12 +108,12 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (!filter.authors.empty()) {
       if (filter.authors.size() == 1) {
         conditions.push_back("pubkey = ?");
-        params.push_back({.t = 1, .s = filter.authors.front()});
+        params.push_back({.t = PARAM_TYPE_STRING, .s = filter.authors.front()});
       } else {
         std::string condition;
         for (const auto &author : filter.authors) {
           condition += "?,";
-          params.push_back({.t = 1, .s = author});
+          params.push_back({.t = PARAM_TYPE_STRING, .s = author});
         }
         condition.pop_back();
         conditions.push_back("pubkey in (" + condition + ")");
@@ -119,12 +122,12 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (!filter.kinds.empty()) {
       if (filter.kinds.size() == 1) {
         conditions.push_back("kind = ?");
-        params.push_back({.t = 0, .n = filter.kinds.front()});
+        params.push_back({.t = PARAM_TYPE_NUMBER, .n = filter.kinds.front()});
       } else {
         std::string condition;
         for (const auto &kind : filter.kinds) {
           condition += "?,";
-          params.push_back({.t = 0, .n = kind});
+          params.push_back({.t = PARAM_TYPE_NUMBER, .n = kind});
         }
         condition.pop_back();
         conditions.push_back("kind in (" + condition + ")");
@@ -139,7 +142,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
         auto first = tag[0];
         for (size_t i = 1; i < tag.size(); i++) {
           nlohmann::json data = {first, tag[i]};
-          params.push_back({.t = 1, .s = "%" + escape(data.dump()) + "%"});
+          params.push_back({.t = PARAM_TYPE_STRING, .s = "%" + escape(data.dump()) + "%"});
           match.push_back(R"(tags LIKE ? ESCAPE '\')");
         }
       }
@@ -163,7 +166,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.push_back({.t = 1, .s = "%" + escape(filter.search) + "%"});
+      params.push_back({.t = PARAM_TYPE_STRING, .s = "%" + escape(filter.search) + "%"});
       conditions.push_back(R"(content LIKE ? ESCAPE '\')");
     }
     if (!conditions.empty()) {
@@ -181,10 +184,10 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
 
     for (size_t i = 0; i < params.size(); i++) {
       switch (params.at(i).t) {
-      case 0:
+      case PARAM_TYPE_NUMBER:
         sqlite3_bind_int(stmt, i + 1, params.at(i).n);
         break;
-      case 1:
+      case PARAM_TYPE_STRING:
         sqlite3_bind_text(stmt, i + 1, params.at(i).s.data(),
                           (int)params.at(i).s.size(), nullptr);
         break;
