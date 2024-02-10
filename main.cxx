@@ -11,6 +11,7 @@ typedef struct subscriber_t {
   std::string sub;
   ws28::Client *client{};
   std::vector<filter_t> filters;
+  std::time_t data_arrival;
 } subscriber_t;
 
 // global variables
@@ -117,7 +118,10 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     relay_send(client, reply);
     return;
   }
-  subscribers.push_back({.sub = sub, .client = client, .filters = filters});
+  subscribers.push_back({.sub = sub,
+                         .client = client,
+                         .filters = filters,
+                         .data_arrival = std::time(nullptr)});
 
   send_records([&](const nlohmann::json &data) { relay_send(client, data); },
                sub, filters, false);
@@ -282,8 +286,9 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
       }
     }
 
-    for (const auto &s : subscribers) {
+    for (auto &s : subscribers) {
       if (matched_filters(s.filters, ev)) {
+        s.data_arrival = std::time(nullptr);
         nlohmann::json reply = {"EVENT", s.sub, ej};
         relay_send(s.client, reply);
       }
@@ -401,9 +406,14 @@ static inline bool check_method(std::string &method) {
 }
 
 static void data_callback(ws28::Client *client, char *data, size_t len,
-                          int /*opcode*/) {
+                          int opcode) {
   assert(client);
   assert(data);
+
+  if (opcode != 1) {
+    return;
+  }
+
   std::string s(data, len);
   spdlog::debug("{} >> {}", client->GetIP(), s);
   try {
@@ -477,6 +487,21 @@ static std::string env(const char *name, const char *default_value) {
   return value;
 }
 
+static void timer_callback(uv_timer_t * /*timer*/) {
+  spdlog::info("cleanup");
+  auto now = std::time(nullptr);
+  for (auto &s : subscribers) {
+    if (s.client == nullptr) {
+      continue;
+    }
+    if (now - s.data_arrival >= 60 * 15) {
+      s.client->Close(0);
+      s.client->Destroy();
+      s.client = nullptr;
+    }
+  }
+}
+
 static void server(short port) {
   uv_loop_t *loop = uv_default_loop();
   auto server = ws28::Server{loop, nullptr};
@@ -490,9 +515,14 @@ static void server(short port) {
   server.Listen(port);
   spdlog::info("server started :{}", port);
 
+  uv_timer_t timer;
+  uv_timer_init(loop, &timer);
+  uv_timer_start(&timer, timer_callback, 1000 * 60 * 5, 0);
+
   uv_signal_t sig;
   uv_signal_init(loop, &sig);
   uv_signal_start(&sig, signal_handler, SIGINT);
+
   uv_run(loop, UV_RUN_DEFAULT);
 }
 
