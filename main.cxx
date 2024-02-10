@@ -401,9 +401,14 @@ static inline bool check_method(std::string &method) {
 }
 
 static void data_callback(ws28::Client *client, char *data, size_t len,
-                          int /*opcode*/) {
+                          int opcode) {
   assert(client);
   assert(data);
+
+  if (opcode != 1) {
+    return;
+  }
+
   std::string s(data, len);
   spdlog::debug("{} >> {}", client->GetIP(), s);
   try {
@@ -460,7 +465,6 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
     }
     relay_notice(s.client, s.sub, "shutdown...");
     s.client->Close(0);
-    s.client->Destroy();
     s.client = nullptr;
   }
   uv_stop(req->loop);
@@ -493,6 +497,7 @@ static void server(short port) {
   uv_signal_t sig;
   uv_signal_init(loop, &sig);
   uv_signal_start(&sig, signal_handler, SIGINT);
+
   uv_run(loop, UV_RUN_DEFAULT);
 }
 
