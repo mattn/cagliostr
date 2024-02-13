@@ -229,18 +229,31 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   return found;
 }
 
+static void to_json(nlohmann::json& j, const event_t& e) {
+  j = nlohmann::json{
+    {"id", e.id},
+    {"pubkey", e.pubkey},
+    {"content", e.content},
+    {"created_at", e.created_at},
+    {"kind", e.kind},
+    {"tags", e.tags},
+    {"sig", e.sig},
+  };
+}
+
+static void from_json(const nlohmann::json& j, event_t& e) {
+  j.at("id").get_to(e.id);
+  j.at("pubkey").get_to(e.pubkey);
+  j.at("content").get_to(e.content);
+  j.at("created_at").get_to(e.created_at);
+  j.at("kind").get_to(e.kind);
+  j.at("tags").get_to(e.tags);
+  j.at("sig").get_to(e.sig);
+}
+
 static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
   try {
-    auto ej = data[1];
-    event_t ev = {};
-    ev.id = ej["id"];
-    ev.pubkey = ej["pubkey"];
-    ev.content = ej["content"];
-    ev.created_at = ej["created_at"];
-    ev.kind = ej["kind"];
-    ev.tags = ej["tags"];
-    ev.sig = ej["sig"];
-
+    const event_t ev = data[1];
     if (!check_event(ev)) {
       relay_notice(client, "error: invalid id or signature");
       return;
@@ -284,7 +297,7 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
 
     for (const auto &s : subscribers) {
       if (matched_filters(s.filters, ev)) {
-        nlohmann::json reply = {"EVENT", s.sub, ej};
+        nlohmann::json reply = {"EVENT", s.sub, ev};
         relay_send(s.client, reply);
       }
     }
@@ -468,7 +481,6 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
     s.client = nullptr;
   }
   uv_stop(req->loop);
-  storage_deinit();
 }
 
 static std::string env(const char *name, const char *default_value) {
@@ -535,5 +547,6 @@ int main(int argc, char *argv[]) {
   storage_init(program.get<std::string>("-database"));
 
   server(program.get<short>("-port"));
+  storage_deinit();
   return 0;
 }
