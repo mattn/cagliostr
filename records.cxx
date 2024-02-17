@@ -376,6 +376,11 @@ void storage_init(const std::string &dsn) {
 	CREATE INDEX IF NOT EXISTS kindidx ON event(kind);
 	CREATE INDEX IF NOT EXISTS kindtimeidx ON event(kind,created_at DESC);
     PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA cache_size = 1000000000;
+    PRAGMA foreign_keys = true;
+    PRAGMA temp_store = memory;
   )";
   ret = sqlite3_exec(conn, sql, nullptr, nullptr, nullptr);
   if (ret != SQLITE_OK) {
