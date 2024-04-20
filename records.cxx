@@ -140,7 +140,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
           continue;
         }
         auto first = tag[0];
-        for (size_t i = 1; i < tag.size(); i++) {
+        for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
           nlohmann::json data = {first, tag[i]};
           params.push_back({.t = PARAM_TYPE_STRING, .s = "%" + escape(data.dump()) + "%"});
           match.push_back(R"(tags LIKE ? ESCAPE '\')");
@@ -182,7 +182,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
       return false;
     }
 
-    for (size_t i = 0; i < params.size(); i++) {
+    for (decltype(params.size()) i = 0; i < params.size(); i++) {
       switch (params.at(i).t) {
       case PARAM_TYPE_NUMBER:
         sqlite3_bind_int(stmt, i + 1, params.at(i).n);
@@ -315,7 +315,7 @@ int delete_record_by_kind_and_pubkey_and_dtag(
 
   std::ostringstream os;
   std::string condition;
-  for (size_t i = 0; i < ids.size(); i++) {
+  for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
     condition += "?,";
   }
   condition.pop_back();
@@ -327,7 +327,7 @@ int delete_record_by_kind_and_pubkey_and_dtag(
     spdlog::error("{}", sqlite3_errmsg(conn));
     return -1;
   }
-  for (size_t i = 0; i < ids.size(); i++) {
+  for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
     sqlite3_bind_text(stmt, i + 1, ids[i].data(), (int)ids[i].size(), nullptr);
   }
 

@@ -7,7 +7,7 @@
 
 static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
   std::vector<uint8_t> bytes;
-  for (unsigned int i = 0; i < hex.length(); i += 2) {
+  for (decltype(hex.length()) i = 0; i < hex.length(); i += 2) {
     std::string s = hex.substr(i, 2);
     auto byte = (uint8_t)strtol(s.c_str(), nullptr, 16);
     bytes.push_back(byte);
@@ -18,7 +18,7 @@ static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
 static inline std::string digest2hex(const uint8_t data[32]) {
   std::stringstream ss;
   ss << std::hex;
-  for (int i = 0; i < 32; ++i) {
+  for (size_t i = 0; i < 32; ++i) {
     ss << std::setw(2) << std::setfill('0') << (int)data[i];
   }
   return ss.str();
