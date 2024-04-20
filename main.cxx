@@ -2,9 +2,9 @@
 #include "version.h"
 #include <Server.h>
 
-#include "spdlog/cfg/env.h"
-#include "spdlog/common.h"
-#include "spdlog/spdlog.h"
+#include <spdlog/cfg/env.h>
+#include <spdlog/common.h>
+#include <spdlog/spdlog.h>
 #include <argparse/argparse.hpp>
 
 typedef struct subscriber_t {

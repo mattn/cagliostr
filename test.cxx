@@ -5,8 +5,8 @@
 #define CAGLIOSTR_TEST
 #include "cagliostr.hxx"
 
-#include "spdlog/common.h"
-#include "spdlog/spdlog.h"
+#include <spdlog/common.h>
+#include <spdlog/spdlog.h>
 
 #include <filesystem>
 
