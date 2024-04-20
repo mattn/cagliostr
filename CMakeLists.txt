@@ -28,7 +28,7 @@ add_custom_command(
     OUTPUT ${LIBSECP256K1_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1
     COMMAND sh
-    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_SHARED_LIBS=off && cmake --build build -t secp256k1'
+    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off && cmake --build build -t secp256k1'
 )
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src)
 
@@ -44,7 +44,7 @@ add_custom_command(
     OUTPUT ${LIBSPDLOG_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog
     COMMAND sh
-    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_SHARED_LIBS=off && cmake --build build -t spdlog'
+    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off && cmake --build build -t spdlog'
 )
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build)
 
