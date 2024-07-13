@@ -338,7 +338,7 @@ static auto nip11 = R"({
   "description": "nostr relay written in C++",
   "pubkey": "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc",
   "contact": "mattn.jp@gmail.com",
-  "supported_nips": [1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 33, 42, 45, 50],
+  "supported_nips": [1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 42, 45, 50],
   "software": "https://github.com/mattn/cagliostr",
   "version": "develop",
   "limitation": {
