@@ -1,4 +1,5 @@
 #include "cagliostr.hxx"
+#include <ctime>
 #include <sstream>
 
 #include <sqlite3.h>
@@ -75,6 +76,21 @@ static std::string escape(const std::string &data) {
   return result;
 }
 
+static bool is_expired(std::vector<std::vector<std::string>> &tags) {
+  time_t now = time(nullptr), expiration;
+  for (const auto &tag : tags) {
+    if (tag.size() == 2 && tag[0] == "expiration") {
+      std::stringstream ss;
+      ss << tag[1];
+      ss >> expiration;
+      if (expiration <= now) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool send_records(std::function<void(const nlohmann::json &)> sender,
                   const std::string &sub, const std::vector<filter_t> &filters,
                   bool do_count) {
@@ -142,7 +158,8 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
         auto first = tag[0];
         for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
           nlohmann::json data = {first, tag[i]};
-          params.push_back({.t = PARAM_TYPE_STRING, .s = "%" + escape(data.dump()) + "%"});
+          params.push_back(
+              {.t = PARAM_TYPE_STRING, .s = "%" + escape(data.dump()) + "%"});
           match.push_back(R"(tags LIKE ? ESCAPE '\')");
         }
       }
@@ -166,7 +183,8 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.push_back({.t = PARAM_TYPE_STRING, .s = "%" + escape(filter.search) + "%"});
+      params.push_back(
+          {.t = PARAM_TYPE_STRING, .s = "%" + escape(filter.search) + "%"});
       conditions.push_back(R"(content LIKE ? ESCAPE '\')");
     }
     if (!conditions.empty()) {
@@ -219,6 +237,14 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
         ej["tags"] = nlohmann::json::parse(j);
         ej["content"] = (char *)sqlite3_column_text(stmt, 5);
         ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
+
+        if (ej["tags"].is_array() && ej["tags"].size() > 0) {
+          std::vector<std::vector<std::string>> tags;
+          ej["tags"].get_to(tags);
+          if (is_expired(tags)) {
+            continue;
+          }
+        }
 
         nlohmann::json reply = {"EVENT", sub, ej};
         sender(reply);
