@@ -35,9 +35,10 @@ void storage_deinit();
 bool insert_record(const event_t &);
 
 int delete_record_by_id(const std::string &);
-int delete_record_by_kind_and_pubkey(int, const std::string &);
+int delete_record_by_kind_and_pubkey(int, const std::string &, std::time_t);
 int delete_record_by_kind_and_pubkey_and_dtag(int, const std::string &,
-                                              const std::vector<std::string> &);
+                                              const std::vector<std::string> &,
+                                              std::time_t);
 
 bool send_records(std::function<void(const nlohmann::json &)>,
                   const std::string &, const std::vector<filter_t> &, bool);

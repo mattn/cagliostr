@@ -45,11 +45,11 @@ static void test_cagliostr_records() {
   // tests for delete_record_by_kind_and_pubkey
   _ok(insert_record(ev), "insert_records should be succeeded");
 
-  _ok(delete_record_by_kind_and_pubkey(0, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc") == 0, "delete_record_by_kind_and_pubkey should be failed for invalid kind");
+  _ok(delete_record_by_kind_and_pubkey(0, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc", 1721057587) == 0, "delete_record_by_kind_and_pubkey should be failed for invalid kind");
 
-  _ok(delete_record_by_kind_and_pubkey(1, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdd") == 0, "delete_record_by_kind_and_pubkey should be failed for invalid pubkey");
+  _ok(delete_record_by_kind_and_pubkey(1, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdd", 1721057587) == 0, "delete_record_by_kind_and_pubkey should be failed for invalid pubkey");
 
-  _ok(delete_record_by_kind_and_pubkey(1, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc") == 1, "delete_record_by_kind_and_pubkey should be succeeded for valid kind and pubkey");
+  _ok(delete_record_by_kind_and_pubkey(1, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc", 1721057587) == 1, "delete_record_by_kind_and_pubkey should be succeeded for valid kind and pubkey");
 
   // tests for delete_record_by_kind_and_pubkey_and_dtag
   ev = string2event(R"({"id":"60a2ad094a92a2fc6619ef7b0e489a316868974647dd4853a3732029b95c93f0","pubkey":"2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc","created_at":1705420612,"kind":30023,"tags":[["r","https://nwc.getalby.com/apps/new?c=Algia"],["r","http://myproxy.example.com:8080"],["d","algia-article-test"],["title","Algia Article Test"],["summary","This is a test"],["published_at","1705420612"],["a","30023:2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc:algia-article-test","wss://yabu.me"]],"content":"# algia\n\nnostr CLI client written in Go\n\n## Usage\n\n```\nNAME:\n   algia - A cli application for nostr\n\nUSAGE:\n   algia [global options] command [command options] [arguments...]\n\nDESCRIPTION:\n   A cli application for nostr\n\nCOMMANDS:\n   timeline, tl  show timeline\n   stream        show stream\n   post, n       post new note\n   reply, r      reply to the note\n   repost, b     repost the note\n   unrepost, B   unrepost the note\n   like, l       like the note\n   unlike, L     unlike the note\n   delete, d     delete the note\n   search, s     search notes\n   dm-list       show DM list\n   dm-timeline   show DM timeline\n   dm-post       post new note\n   profile       show profile\n   powa          post ぽわ〜\n   puru          post ぷる\n   zap           zap note1\n   version       show version\n   help, h       Shows a list of commands or help for one command\n\nGLOBAL OPTIONS:\n   -a value        profile name\n   --relays value  relays\n   -V              verbose (default: false)\n   --help, -h      show help\n```\n\n## Installation\n\nDownload binary from Release page.\n\nOr install with go install command.\n```\ngo install github.com/mattn/algia@latest\n```\n\n## Configuration\n\nMinimal configuration. Need to be at ~/.config/algia/config.json\n\n```json\n{\n  \"relays\": {\n    \"wss://relay-jp.nostr.wirednet.jp\": {\n      \"read\": true,\n      \"write\": true,\n      \"search\": false\n    }\n  },\n  \"privatekey\": \"nsecXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\"\n}\n```\n\nIf you want to zap via Nostr Wallet Connect, please add `nwc-pub` and `nwc-uri` which are provided from \u003chttps://nwc.getalby.com/apps/new?c=Algia\u003e\n\n```json\n{\n  \"relays\": {\n   ...\n  },\n  \"privatekey\": \"nsecXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\",\n  \"nwc-uri\": \"nostr+walletconnect://xxxxx\",\n  \"nwc-pub\": \"xxxxxxxxxxxxxxxxxxxxxxx\"\n}\n```\n\n## TODO\n\n* [x] like\n* [x] repost\n* [x] zap\n* [x] upload images\n\n## FAQ\n\nDo you use proxy? then set environment variable `HTTP_PROXY` like below.\n\n    HTTP_PROXY=http://myproxy.example.com:8080\n\n## License\n\nMIT\n\n## Author\n\nYasuhiro Matsumoto (a.k.a. mattn)\n","sig":"802600cdd86e3d21435832307a0f01da8e031060880c0aa6d7f6338e17202b34e2eba6bab2c8acf316ff78c1b2489d38f02eaea6da892de31448af4875e503f6"})");
@@ -59,13 +59,13 @@ static void test_cagliostr_records() {
   std::vector<std::string> valid_dtag = {"d", "algia-article-test"};
   std::vector<std::string> invalid_dtag = {"d", "algia-article-test_"};
 
-  _ok(delete_record_by_kind_and_pubkey_and_dtag(30022, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc", valid_dtag) == 0, "delete_record_by_kind_and_pubkey_and_dtag should be failed for invalid kind");
+  _ok(delete_record_by_kind_and_pubkey_and_dtag(30022, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc", valid_dtag, 1721057587) == 0, "delete_record_by_kind_and_pubkey_and_dtag should be failed for invalid kind");
 
-  _ok(delete_record_by_kind_and_pubkey_and_dtag(30023, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdd", valid_dtag) == 0, "delete_record_by_kind_and_pubkey_and_dtag should be failed for invalid pubkey");
+  _ok(delete_record_by_kind_and_pubkey_and_dtag(30023, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdd", valid_dtag, 1721057587) == 0, "delete_record_by_kind_and_pubkey_and_dtag should be failed for invalid pubkey");
 
-  _ok(delete_record_by_kind_and_pubkey_and_dtag(30023, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc", invalid_dtag) == 0, "delete_record_by_kind_and_pubkey_and_dtag should be failed for invalid dtag");
+  _ok(delete_record_by_kind_and_pubkey_and_dtag(30023, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc", invalid_dtag, 1721057587) == 0, "delete_record_by_kind_and_pubkey_and_dtag should be failed for invalid dtag");
 
-  _ok(delete_record_by_kind_and_pubkey_and_dtag(30023, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc", valid_dtag) == 1, "delete_record_by_kind_and_pubkey_and_dtag should be succeeded for valid kind and pubkey and dtag");
+  _ok(delete_record_by_kind_and_pubkey_and_dtag(30023, "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc", valid_dtag, 1721057587) == 1, "delete_record_by_kind_and_pubkey_and_dtag should be succeeded for valid kind and pubkey and dtag");
 
   storage_deinit();
 }

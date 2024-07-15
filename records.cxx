@@ -283,8 +283,8 @@ int delete_record_by_id(const std::string &id) {
   return sqlite3_changes(conn);
 }
 
-int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
-  const auto sql = R"(DELETE FROM event WHERE kind = ? AND pubkey = ?)";
+int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey, std::time_t created_at) {
+  const auto sql = R"(DELETE FROM event WHERE kind = ? AND pubkey = ? AND created_at < ?)";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
@@ -293,6 +293,7 @@ int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
   }
   sqlite3_bind_int(stmt, 1, kind);
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
+  sqlite3_bind_int(stmt, 3, created_at);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
@@ -306,9 +307,9 @@ int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey) {
 }
 
 int delete_record_by_kind_and_pubkey_and_dtag(
-    int kind, const std::string &pubkey, const std::vector<std::string> &tag) {
+    int kind, const std::string &pubkey, const std::vector<std::string> &tag, std::time_t created_at) {
   std::string sql =
-      R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ?)";
+      R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ? AND created_at < ?)";
 
   sqlite3_stmt *stmt = nullptr;
   auto ret =
@@ -324,6 +325,7 @@ int delete_record_by_kind_and_pubkey_and_dtag(
   sqlite3_bind_int(stmt, 1, kind);
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
   sqlite3_bind_text(stmt, 3, s.data(), (int)s.size(), nullptr);
+  sqlite3_bind_int(stmt, 4, created_at);
 
   std::vector<std::string> ids;
   while (true) {

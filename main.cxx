@@ -2,10 +2,10 @@
 #include "version.h"
 #include <Server.h>
 
+#include <argparse/argparse.hpp>
 #include <spdlog/cfg/env.h>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
-#include <argparse/argparse.hpp>
 
 typedef struct subscriber_t {
   std::string sub;
@@ -229,19 +229,16 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   return found;
 }
 
-static void to_json(nlohmann::json& j, const event_t& e) {
+static void to_json(nlohmann::json &j, const event_t &e) {
   j = nlohmann::json{
-    {"id", e.id},
-    {"pubkey", e.pubkey},
-    {"content", e.content},
-    {"created_at", e.created_at},
-    {"kind", e.kind},
-    {"tags", e.tags},
-    {"sig", e.sig},
+      {"id", e.id},           {"pubkey", e.pubkey},
+      {"content", e.content}, {"created_at", e.created_at},
+      {"kind", e.kind},       {"tags", e.tags},
+      {"sig", e.sig},
   };
 }
 
-static void from_json(const nlohmann::json& j, event_t& e) {
+static void from_json(const nlohmann::json &j, event_t &e) {
   j.at("id").get_to(e.id);
   j.at("pubkey").get_to(e.pubkey);
   j.at("content").get_to(e.content);
@@ -274,15 +271,16 @@ static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
         return;
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
-        if (delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey) < 0) {
+        if (delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey,
+                                             ev.created_at) < 0) {
           return;
         }
       } else if (30000 <= ev.kind && ev.kind < 40000) {
         std::string d;
         for (const auto &tag : ev.tags) {
           if (tag.size() >= 2 && tag[0] == "d") {
-            if (delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey,
-                                                          tag) < 0) {
+            if (delete_record_by_kind_and_pubkey_and_dtag(
+                    ev.kind, ev.pubkey, tag, ev.created_at) < 0) {
               return;
             }
           }
