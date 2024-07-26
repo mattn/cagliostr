@@ -190,7 +190,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (!conditions.empty()) {
       sql += " WHERE " + join(conditions, " AND ");
     }
-    sql += " ORDER BY created_at DESC LIMIT ?";
+    sql += " ORDER BY created_at, id DESC LIMIT ?";
 
     sqlite3_stmt *stmt = nullptr;
     auto ret =
