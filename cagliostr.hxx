@@ -6,6 +6,9 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#if defined(__GLIBC__)
+#  include <malloc.h>
+#endif
 
 #include <nlohmann/json.hpp>
 

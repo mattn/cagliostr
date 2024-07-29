@@ -464,6 +464,11 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
     spdlog::warn("!! {}", e.what());
     relay_notice(client, std::string("error: ") + e.what());
   }
+
+#if defined(__GLIBC__)
+  // FIXME https://github.com/nlohmann/json/issues/1924
+  malloc_trim(0);
+#endif
 }
 
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
