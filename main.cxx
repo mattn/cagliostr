@@ -18,7 +18,7 @@ std::vector<subscriber_t> subscribers;
 
 static void relay_send(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
-  auto s = data.dump();
+  const auto& s = data.dump();
   spdlog::debug("{} << {}", client->GetIP(), s);
   client->Send(s.data(), s.size(), 1);
 }
@@ -49,7 +49,7 @@ static bool is_hex(const std::string &s, size_t len) {
   return true;
 }
 
-static bool make_filter(filter_t &filter, nlohmann::json &data) {
+static bool make_filter(filter_t &filter, const nlohmann::json &data) {
   if (data.count("ids") > 0) {
     for (const auto &id : data["ids"]) {
       if (!is_hex(id, 64))
@@ -69,7 +69,7 @@ static bool make_filter(filter_t &filter, nlohmann::json &data) {
       filter.kinds.push_back(kind);
     }
   }
-  for (nlohmann::json::iterator it = data.begin(); it != data.end(); ++it) {
+  for (nlohmann::json::const_iterator it = data.begin(); it != data.end(); ++it) {
     if (it.key().at(0) == '#' && it.value().is_array()) {
       std::vector<std::string> tag = {it.key().c_str() + 1};
       for (const auto &v : it.value()) {
@@ -93,7 +93,7 @@ static bool make_filter(filter_t &filter, nlohmann::json &data) {
   return true;
 }
 
-static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
+static void do_relay_req(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
   std::string sub = data[1];
   std::vector<filter_t> filters;
@@ -112,7 +112,7 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
     }
   }
   if (filters.empty()) {
-    auto reply =
+    const auto reply =
         nlohmann::json::array({"NOTICE", sub, "error: invalid filter"});
     relay_send(client, reply);
     return;
@@ -121,11 +121,11 @@ static void do_relay_req(ws28::Client *client, nlohmann::json &data) {
 
   send_records([&](const nlohmann::json &data) { relay_send(client, data); },
                sub, filters, false);
-  auto reply = nlohmann::json::array({"EOSE", sub});
+  const auto reply = nlohmann::json::array({"EOSE", sub});
   relay_send(client, reply);
 }
 
-static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
+static void do_relay_count(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
   std::string sub = data[1];
   std::vector<filter_t> filters;
@@ -146,7 +146,7 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
     }
   }
   if (filters.empty()) {
-    auto reply =
+    const auto reply =
         nlohmann::json::array({"NOTICE", sub, "error: invalid filter"});
     relay_send(client, reply);
     return;
@@ -156,7 +156,7 @@ static void do_relay_count(ws28::Client *client, nlohmann::json &data) {
                sub, filters, true);
 }
 
-static void do_relay_close(ws28::Client *client, nlohmann::json &data) {
+static void do_relay_close(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
   std::string sub = data[1];
   auto it = subscribers.begin();
@@ -174,20 +174,20 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   auto found = false;
   for (const auto &filter : filters) {
     if (!filter.ids.empty()) {
-      auto result = std::find(filter.ids.begin(), filter.ids.end(), ev.id);
+      const auto result = std::find(filter.ids.begin(), filter.ids.end(), ev.id);
       if (result == filter.ids.end()) {
         continue;
       }
     }
     if (!filter.authors.empty()) {
-      auto result =
+      const auto result =
           std::find(filter.authors.begin(), filter.authors.end(), ev.pubkey);
       if (result == filter.authors.end()) {
         continue;
       }
     }
     if (!filter.kinds.empty()) {
-      auto result =
+      const auto result =
           std::find(filter.kinds.begin(), filter.kinds.end(), ev.kind);
       if (result == filter.kinds.end()) {
         continue;
@@ -248,7 +248,7 @@ static void from_json(const nlohmann::json &j, event_t &e) {
   j.at("sig").get_to(e.sig);
 }
 
-static void do_relay_event(ws28::Client *client, nlohmann::json &data) {
+static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
   try {
     const event_t ev = data[1];
     if (!check_event(ev)) {
@@ -361,7 +361,7 @@ static void http_request_callback(ws28::HTTPRequest &req,
   spdlog::debug("{} >> {} {}", req.ip, req.method, req.path);
   resp.header("Access-Control-Allow-Origin", "*");
   if (req.method == "GET") {
-    auto accept = req.headers.Get("accept");
+    const auto accept = req.headers.Get("accept");
     if (accept.has_value() && accept.value() == "application/nostr+json") {
       resp.status(200);
       resp.header("content-type", "application/json; charset=UTF-8");
@@ -423,7 +423,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   std::string s(data, len);
   spdlog::debug("{} >> {}", client->GetIP(), s);
   try {
-    auto payload = nlohmann::json::parse(s);
+    const auto payload = nlohmann::json::parse(s);
 
     if (!payload.is_array() || payload.size() < 2 || !payload[0].is_string()) {
       relay_notice(client, "error: invalid request");
