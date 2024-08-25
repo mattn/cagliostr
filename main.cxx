@@ -397,8 +397,8 @@ static const std::string realIp(ws28::HTTPRequest &req) {
 
 static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   auto ip = realIp(req);
-  char *p = new char[sizeof(ip.length())];
-  std::memcpy(p, ip.c_str(), ip.length());
+  char *p = new char[ip.length()+1];
+  std::strcpy(p, ip.c_str());
   client->SetUserData(p);
   spdlog::debug("CONNECTED {}", ip);
 }
