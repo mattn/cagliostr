@@ -390,6 +390,11 @@ static const std::string realIp(ws28::HTTPRequest &req) {
     value = req.headers.Get("X-Real-Ip");
     if (value.has_value()) {
       ip = value.value();
+    } else {
+      value = req.headers.Get("CF-Connecting-IP");
+      if (value.has_value()) {
+        ip = value.value();
+      }
     }
   }
   return ip;
@@ -397,7 +402,7 @@ static const std::string realIp(ws28::HTTPRequest &req) {
 
 static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   auto ip = realIp(req);
-  char *p = new char[ip.length()+1];
+  char *p = new char[ip.length() + 1];
   std::strcpy(p, ip.c_str());
   client->SetUserData(p);
   spdlog::debug("CONNECTED {}", ip);
