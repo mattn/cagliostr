@@ -382,6 +382,9 @@ static void http_request_callback(ws28::HTTPRequest &req,
 }
 
 static const std::string realIp(ws28::HTTPRequest &req) {
+  req.headers.ForEach([](const std::string_view k, const std::string_view v) {
+    spdlog::debug("DEBUG {}:{}", k, v);
+  });
   std::string ip{req.ip};
   auto value = req.headers.Get("x-forwarded-for");
   if (value.has_value()) {
