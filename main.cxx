@@ -1,3 +1,4 @@
+#include "Headers.h"
 #include "cagliostr.hxx"
 #include "version.h"
 #include <Server.h>
@@ -18,7 +19,7 @@ std::vector<subscriber_t> subscribers;
 
 static void relay_send(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
-  const auto& s = data.dump();
+  const auto &s = data.dump();
   spdlog::debug("{} << {}", client->GetIP(), s);
   client->Send(s.data(), s.size(), 1);
 }
@@ -69,7 +70,8 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
       filter.kinds.push_back(kind);
     }
   }
-  for (nlohmann::json::const_iterator it = data.begin(); it != data.end(); ++it) {
+  for (nlohmann::json::const_iterator it = data.begin(); it != data.end();
+       ++it) {
     if (it.key().at(0) == '#' && it.value().is_array()) {
       std::vector<std::string> tag = {it.key().c_str() + 1};
       for (const auto &v : it.value()) {
@@ -174,7 +176,8 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   auto found = false;
   for (const auto &filter : filters) {
     if (!filter.ids.empty()) {
-      const auto result = std::find(filter.ids.begin(), filter.ids.end(), ev.id);
+      const auto result =
+          std::find(filter.ids.begin(), filter.ids.end(), ev.id);
       if (result == filter.ids.end()) {
         continue;
       }
@@ -378,24 +381,48 @@ static void http_request_callback(ws28::HTTPRequest &req,
   }
 }
 
-static void connect_callback(ws28::Client * /*client*/,
-                             ws28::HTTPRequest &req) {
-  spdlog::debug("CONNECTED {}", req.ip);
+static const std::string realIp(ws28::HTTPRequest &req) {
+  std::string ip{req.ip};
+  auto value = req.headers.Get("X-Forwarded-For");
+  if (value.has_value()) {
+    ip = value.value(); // possible to be multiple comma separated
+  } else {
+    value = req.headers.Get("X-Real-Ip");
+    if (value.has_value()) {
+      ip = value.value();
+    }
+  }
+  return ip;
 }
 
-static bool tcpcheck_callback(std::string_view ip, bool secure) {
-  spdlog::debug("TCPCHECK {} {}", ip, secure);
+static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
+  auto ip = realIp(req);
+  char *p = new char[sizeof(ip.length())];
+  std::memcpy(p, ip.c_str(), ip.length());
+  client->SetUserData(p);
+  spdlog::debug("CONNECTED {}", ip);
+}
+
+static bool tcpcheck_callback(std::string_view /*ip*/, bool /*secure*/) {
+  // spdlog::debug("TCPCHECK {} {}", ip, secure);
   return true;
 }
 
 static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
-  spdlog::debug("CHECK {}", req.ip);
+  spdlog::debug("CHECK {}", realIp(req));
   return true;
 }
 
 static void disconnect_callback(ws28::Client *client) {
   assert(client);
-  spdlog::debug("DISCONNECT {}", client->GetIP());
+
+  char *p = (char *)client->GetUserData();
+  if (p != nullptr) {
+    spdlog::debug("DISCONNECT {}", p);
+    delete[] p;
+  } else {
+    spdlog::debug("DISCONNECT {}", client->GetIP());
+  }
   auto it = subscribers.begin();
   while (it != subscribers.end()) {
     if (it->client == client) {
