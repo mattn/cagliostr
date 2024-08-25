@@ -17,10 +17,31 @@ typedef struct subscriber_t {
 // global variables
 std::vector<subscriber_t> subscribers;
 
+static const std::string realIP(ws28::Client *client) {
+  char *p = (char *)client->GetUserData();
+  if (p != nullptr)
+    return p;
+  return client->GetIP();
+}
+
+static const std::string realIP(ws28::HTTPRequest &req) {
+  std::string ip{req.ip};
+  auto value = req.headers.Get("x-forwarded-for");
+  if (value.has_value()) {
+    ip = value.value(); // possible to be multiple comma separated
+  } else {
+    value = req.headers.Get("x-real-ip");
+    if (value.has_value()) {
+      ip = value.value();
+    }
+  }
+  return ip;
+}
+
 static void relay_send(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
   const auto &s = data.dump();
-  spdlog::debug("{} << {}", client->GetIP(), s);
+  spdlog::debug("{} << {}", realIP(client), s);
   client->Send(s.data(), s.size(), 1);
 }
 
@@ -381,25 +402,8 @@ static void http_request_callback(ws28::HTTPRequest &req,
   }
 }
 
-static const std::string realIp(ws28::HTTPRequest &req) {
-  req.headers.ForEach([](const std::string_view k, const std::string_view v) {
-    spdlog::debug("DEBUG {}:{}", k, v);
-  });
-  std::string ip{req.ip};
-  auto value = req.headers.Get("x-forwarded-for");
-  if (value.has_value()) {
-    ip = value.value(); // possible to be multiple comma separated
-  } else {
-    value = req.headers.Get("x-real-ip");
-    if (value.has_value()) {
-      ip = value.value();
-    }
-  }
-  return ip;
-}
-
 static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
-  auto ip = realIp(req);
+  auto ip = realIP(req);
   char *p = new char[ip.length() + 1];
   std::strcpy(p, ip.c_str());
   client->SetUserData(p);
@@ -412,20 +416,17 @@ static bool tcpcheck_callback(std::string_view /*ip*/, bool /*secure*/) {
 }
 
 static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
-  spdlog::debug("CHECK {}", realIp(req));
+  spdlog::debug("CHECK {}", realIP(req));
   return true;
 }
 
 static void disconnect_callback(ws28::Client *client) {
   assert(client);
 
+  spdlog::debug("DISCONNECT {}", realIP(client));
   char *p = (char *)client->GetUserData();
-  if (p != nullptr) {
-    spdlog::debug("DISCONNECT {}", p);
+  if (p != nullptr)
     delete[] p;
-  } else {
-    spdlog::debug("DISCONNECT {}", client->GetIP());
-  }
   auto it = subscribers.begin();
   while (it != subscribers.end()) {
     if (it->client == client) {
@@ -451,7 +452,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   }
 
   std::string s(data, len);
-  spdlog::debug("{} >> {}", client->GetIP(), s);
+  spdlog::debug("{} >> {}", realIP(client), s);
   try {
     const auto payload = nlohmann::json::parse(s);
 
