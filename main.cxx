@@ -383,21 +383,13 @@ static void http_request_callback(ws28::HTTPRequest &req,
 
 static const std::string realIp(ws28::HTTPRequest &req) {
   std::string ip{req.ip};
-  req.headers.ForEach([](const std::string_view k, const std::string_view v) {
-    spdlog::debug("DEBUG {}:{}", k, v);
-  });
-  auto value = req.headers.Get("X-Forwarded-For");
+  auto value = req.headers.Get("x-forwarded-for");
   if (value.has_value()) {
     ip = value.value(); // possible to be multiple comma separated
   } else {
-    value = req.headers.Get("X-Real-Ip");
+    value = req.headers.Get("x-real-ip");
     if (value.has_value()) {
       ip = value.value();
-    } else {
-      value = req.headers.Get("CF-Connecting-IP");
-      if (value.has_value()) {
-        ip = value.value();
-      }
     }
   }
   return ip;
