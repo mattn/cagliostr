@@ -15,8 +15,8 @@ add_custom_target(libuv DEPENDS ${LIBUV_LIBRARIES})
 add_custom_command(
     OUTPUT ${LIBUV_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv
-    COMMAND sh
-    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && cmake --build build -t uv_a'
+    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    COMMAND ${CMAKE_COMMAND} --build build -t uv_a
 )
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build)
 
@@ -24,11 +24,13 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build)
 # libsecp256k1
 set(LIBSECP256K1_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src/libsecp256k1.a)
 add_custom_target(libsecp256k1 DEPENDS ${LIBSECP256K1_LIBRARIES})
+#target_compile_definitions(${LIBSECP256K1_LIBRARIES} PRIVATE SECP256K1_STATIC)
+add_compile_definitions(SECP256K1_STATIC)
 add_custom_command(
     OUTPUT ${LIBSECP256K1_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1
-    COMMAND sh
-    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off && cmake --build build -t secp256k1'
+    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off
+    COMMAND ${CMAKE_COMMAND} --build build -t secp256k1
 )
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src)
 
@@ -43,8 +45,8 @@ add_custom_target(libspdlog DEPENDS ${LIBSPDLOG_LIBRARIES})
 add_custom_command(
     OUTPUT ${LIBSPDLOG_LIBRARIES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog
-    COMMAND sh
-    ARGS -c 'cmake -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off && cmake --build build -t spdlog'
+    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off
+    COMMAND ${CMAKE_COMMAND} --build build -t spdlog
 )
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build)
 
@@ -72,6 +74,9 @@ target_link_libraries(${t_} INTERFACE sqlite3)
 target_link_libraries(${t_} INTERFACE ${LIBUV_LIBRARIES})
 target_link_libraries(${t_} INTERFACE ${LIBSECP256K1_LIBRARIES})
 target_link_libraries(${t_} INTERFACE ${LIBSPDLOG_LIBRARIES})
+if (WIN32)
+target_link_libraries(${t_} INTERFACE ws2_32 dbghelp userenv iphlpapi)
+endif()
 
 #--------------------------------------------------
 # cagliostr
