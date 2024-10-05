@@ -382,7 +382,7 @@ static auto nip11 = R"({
 
 static void http_request_callback(ws28::HTTPRequest &req,
                                   ws28::HTTPResponse &resp) {
-  spdlog::debug("{} >> {} {}", req.ip, req.method, req.path);
+  spdlog::debug("{} >> {} {}", realIP(req), req.method, req.path);
   resp.header("Access-Control-Allow-Origin", "*");
   if (req.method == "GET") {
     const auto accept = req.headers.Get("accept");
