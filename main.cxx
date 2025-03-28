@@ -280,6 +280,14 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
       return;
     }
 
+    for (const auto &tag : ev.tags) {
+      if (tag.size() == 1 && tag[0] == "-") {
+        // TODO
+        relay_notice(client, "error: AUTH required");
+        return;
+      }
+    }
+
     if (ev.kind == 5) {
       for (const auto &tag : ev.tags) {
         if (tag.size() >= 2 && tag[0] == "e") {
