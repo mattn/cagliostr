@@ -283,7 +283,9 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
     for (const auto &tag : ev.tags) {
       if (tag.size() == 1 && tag[0] == "-") {
         // TODO
-        relay_notice(client, "error: AUTH required");
+        nlohmann::json reply = {"OK", ev.id, false,
+                                "blocked: event blocked by relay"};
+        relay_send(client, reply);
         return;
       }
     }
