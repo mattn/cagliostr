@@ -3,6 +3,9 @@
 #include "version.h"
 #include <Server.h>
 
+#include <iomanip>
+#include <random>
+
 #include <argparse/argparse.hpp>
 #include <spdlog/cfg/env.h>
 #include <spdlog/common.h>
@@ -14,13 +17,21 @@ typedef struct subscriber_t {
   std::vector<filter_t> filters;
 } subscriber_t;
 
+typedef struct client_t {
+  std::string ip;
+  std::string challenge;
+  std::string pubkey;
+} client_t;
+
 // global variables
 std::vector<subscriber_t> subscribers;
 
+std::string service_url;
+
 static const std::string realIP(ws28::Client *client) {
-  char *p = (char *)client->GetUserData();
-  if (p != nullptr)
-    return p;
+  client_t *ci = (client_t *)client->GetUserData();
+  if (ci != nullptr)
+    return ci->ip;
   return client->GetIP();
 }
 
@@ -36,6 +47,26 @@ static const std::string realIP(ws28::HTTPRequest &req) {
     }
   }
   return ip;
+}
+
+static const std::string challenge(ws28::Client *client) {
+  client_t *ci = (client_t *)client->GetUserData();
+  if (ci != nullptr)
+    return ci->challenge;
+  return "";
+}
+
+static const void set_auth_pubkey(ws28::Client *client, std::string pubkey) {
+  client_t *ci = (client_t *)client->GetUserData();
+  if (ci != nullptr)
+    ci->pubkey = pubkey;
+}
+
+static const bool check_auth_pubkey(ws28::Client *client, std::string pubkey) {
+  client_t *ci = (client_t *)client->GetUserData();
+  if (ci != nullptr)
+    return ci->pubkey == pubkey;
+  return false;
 }
 
 static void relay_send(ws28::Client *client, const nlohmann::json &data) {
@@ -55,6 +86,20 @@ static inline void relay_notice(ws28::Client *client, const std::string &id,
                                 const std::string &msg) {
   assert(client);
   nlohmann::json data = {"NOTICE", id, msg};
+  relay_send(client, data);
+}
+
+static inline void relay_closed(ws28::Client *client, const std::string &msg) {
+  assert(client);
+  nlohmann::json data = {"CLOSED", msg};
+  relay_send(client, data);
+  client->Close(0);
+}
+
+static inline void relay_closed(ws28::Client *client, const std::string &id,
+                                const std::string &msg) {
+  assert(client);
+  nlohmann::json data = {"CLOSED", id, msg};
   relay_send(client, data);
 }
 
@@ -282,11 +327,12 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
 
     for (const auto &tag : ev.tags) {
       if (tag.size() == 1 && tag[0] == "-") {
-        // TODO
-        nlohmann::json reply = {"OK", ev.id, false,
-                                "blocked: event blocked by relay"};
-        relay_send(client, reply);
-        return;
+        if (!check_auth_pubkey(client, ev.pubkey)) {
+          const auto reply = nlohmann::json::array(
+              {"OK", ev.id, false, "auth-required: authentication required"});
+          relay_send(client, reply);
+          return;
+        }
       }
     }
 
@@ -334,6 +380,43 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
       }
     }
     nlohmann::json reply = {"OK", ev.id, true, ""};
+    relay_send(client, reply);
+  } catch (std::exception &e) {
+    spdlog::warn("!! {}", e.what());
+  }
+}
+
+static void do_relay_auth(ws28::Client *client, const nlohmann::json &data) {
+  try {
+    const event_t ev = data[1];
+    if (!check_event(ev)) {
+      relay_notice(client, "error: invalid id or signature");
+      return;
+    }
+
+    auto ok = 0;
+    for (const auto &tag : ev.tags) {
+      if (tag.size() < 2)
+        continue;
+      if (tag[0] == "challenge") {
+        if (tag[1] == challenge(client))
+          ok++;
+      }
+      if (tag[0] == "relay") {
+        if (tag[1] == service_url)
+          ok++;
+      }
+    }
+
+    if (ok == 2) {
+      set_auth_pubkey(client, ev.pubkey);
+      nlohmann::json reply = {"OK", ev.id, true, ""};
+      relay_send(client, reply);
+      return;
+    }
+
+    nlohmann::json reply = {"OK", ev.id, false,
+                            "error: failed to authenticate"};
     relay_send(client, reply);
   } catch (std::exception &e) {
     spdlog::warn("!! {}", e.what());
@@ -412,12 +495,26 @@ static void http_request_callback(ws28::HTTPRequest &req,
   }
 }
 
+static std::string generate_random_hex_16() {
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
+  uint64_t random_value = dist(gen);
+  std::ostringstream oss;
+  oss << std::hex << std::setw(16) << std::setfill('0') << random_value;
+  return oss.str();
+}
+
 static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
-  auto ip = realIP(req);
-  char *p = new char[ip.length() + 1];
-  std::strcpy(p, ip.c_str());
-  client->SetUserData(p);
-  spdlog::debug("CONNECTED {}", ip);
+  auto challenge = generate_random_hex_16();
+  nlohmann::json auth = {"AUTH", challenge};
+  relay_send(client, auth);
+  client_t *ci = new client_t{
+      .ip = realIP(req),
+      .challenge = challenge,
+  };
+  client->SetUserData(ci);
+  spdlog::debug("CONNECTED {}", ci->ip);
 }
 
 static bool tcpcheck_callback(std::string_view /*ip*/, bool /*secure*/) {
@@ -434,9 +531,9 @@ static void disconnect_callback(ws28::Client *client) {
   assert(client);
 
   spdlog::debug("DISCONNECT {}", realIP(client));
-  char *p = (char *)client->GetUserData();
-  if (p != nullptr)
-    delete[] p;
+  client_t *ci = (client_t *)client->GetUserData();
+  if (ci != nullptr)
+    delete ci;
   auto it = subscribers.begin();
   while (it != subscribers.end()) {
     if (it->client == client) {
@@ -449,7 +546,7 @@ static void disconnect_callback(ws28::Client *client) {
 
 static inline bool check_method(std::string &method) {
   return method == "EVENT" || method == "REQ" || method == "COUNT" ||
-         method == "CLOSE";
+         method == "CLOSE" || method == "AUTH";
 }
 
 static void data_callback(ws28::Client *client, char *data, size_t len,
@@ -473,9 +570,11 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
 
     std::string method = payload[0];
     if (!check_method(method)) {
-      relay_notice(client, payload[1], "error: invalid request");
+      std::string id = payload[1];
+      relay_notice(client, id, "error: invalid request");
       return;
     }
+
     if (method == "REQ") {
       if (payload.size() < 3) {
         relay_notice(client, payload[1], "error: invalid request");
@@ -498,6 +597,10 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
     }
     if (method == "EVENT") {
       do_relay_event(client, payload);
+      return;
+    }
+    if (method == "AUTH") {
+      do_relay_auth(client, payload);
       return;
     }
     relay_notice(client, payload[1], "error: invalid request");
@@ -565,6 +668,11 @@ int main(int argc, char *argv[]) {
         .help("connection string")
         .metavar("DATABASE")
         .nargs(1);
+    program.add_argument("-service-url")
+        .default_value(env("SERVICE_URL", ""))
+        .help("service URL")
+        .metavar("SERVICE_URL")
+        .nargs(1);
     program.add_argument("-loglevel")
         .default_value(env("SPDLOG_LEVEL", "info"))
         .help("log level")
@@ -589,6 +697,7 @@ int main(int argc, char *argv[]) {
   spdlog::set_level(
       spdlog::level::from_str(program.get<std::string>("-loglevel")));
   storage_init(program.get<std::string>("-database"));
+  service_url = program.get<std::string>("-service-url");
 
   server(program.get<short>("-port"));
   storage_deinit();
