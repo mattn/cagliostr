@@ -407,7 +407,7 @@ static void do_relay_auth(ws28::Client *client, const nlohmann::json &data) {
         auto s = tag[1];
         while (s.ends_with('/'))
           s.erase(s.find_last_not_of('/') + 1);
-        if (tag[1] == service_url)
+        if (s == service_url)
           ok++;
       }
     }
