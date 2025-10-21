@@ -22,7 +22,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build)
 
 #--------------------------------------------------
 # libsecp256k1
-set(LIBSECP256K1_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src/libsecp256k1.a)
+set(LIBSECP256K1_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/lib/libsecp256k1.a)
 add_custom_target(libsecp256k1 DEPENDS ${LIBSECP256K1_LIBRARIES})
 #target_compile_definitions(${LIBSECP256K1_LIBRARIES} PRIVATE SECP256K1_STATIC)
 add_compile_definitions(SECP256K1_STATIC)
@@ -33,22 +33,6 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} --build build -t secp256k1
 )
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src)
-
-#--------------------------------------------------
-# libspdlog
-if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    set(LIBSPDLOG_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/libspdlogd.a)
-else()
-    set(LIBSPDLOG_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/libspdlog.a)
-endif()
-add_custom_target(libspdlog DEPENDS ${LIBSPDLOG_LIBRARIES})
-add_custom_command(
-    OUTPUT ${LIBSPDLOG_LIBRARIES}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog
-    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off
-    COMMAND ${CMAKE_COMMAND} --build build -t spdlog
-)
-link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build)
 
 #--------------------------------------------------
 # cagliostr-core
@@ -73,7 +57,6 @@ target_link_libraries(${t_} INTERFACE ssl)
 target_link_libraries(${t_} INTERFACE sqlite3)
 target_link_libraries(${t_} INTERFACE ${LIBUV_LIBRARIES})
 target_link_libraries(${t_} INTERFACE ${LIBSECP256K1_LIBRARIES})
-target_link_libraries(${t_} INTERFACE ${LIBSPDLOG_LIBRARIES})
 if (WIN32)
 target_link_libraries(${t_} INTERFACE ws2_32 dbghelp userenv iphlpapi)
 endif()
@@ -81,7 +64,7 @@ endif()
 #--------------------------------------------------
 # cagliostr
 set (t_ cagliostr)
-add_executable(${t_} main.cxx records.cxx sign.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp deps/matheus28-ws28/src/base64.cpp)
+add_executable(${t_} main.cxx records.cxx sign.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp)
 target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 #--------------------------------------------------

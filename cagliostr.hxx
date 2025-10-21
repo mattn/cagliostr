@@ -11,6 +11,8 @@
 #endif
 
 #include <nlohmann/json.hpp>
+#include <spdlog/common.h>
+#include <spdlog/spdlog.h>
 
 typedef struct event_t {
   std::string id;
@@ -47,5 +49,11 @@ bool send_records(std::function<void(const nlohmann::json &)>,
                   const std::string &, const std::vector<filter_t> &, bool);
 
 bool check_event(const event_t &);
+
+#ifdef INITIALIZE_LOGGER
+auto console = spdlog::stdout_color_mt("cagliostr");
+#else
+extern std::shared_ptr<spdlog::logger> console;
+#endif
 
 #endif

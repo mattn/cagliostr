@@ -4,8 +4,6 @@
 
 #include <sqlite3.h>
 
-#include <spdlog/common.h>
-#include <spdlog/spdlog.h>
 
 // global variables
 sqlite3 *conn = nullptr;
@@ -40,7 +38,7 @@ bool insert_record(const event_t &ev) {
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, -1, &stmt, nullptr);
   if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     return false;
   }
   nlohmann::json tags = ev.tags;
@@ -56,7 +54,7 @@ bool insert_record(const event_t &ev) {
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     sqlite3_finalize(stmt);
     return false;
   }
@@ -196,7 +194,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     auto ret =
         sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
     if (ret != SQLITE_OK) {
-      spdlog::error("{}", sqlite3_errmsg(conn));
+      console->error("{}", sqlite3_errmsg(conn));
       return false;
     }
 
@@ -216,7 +214,7 @@ bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (do_count) {
       ret = sqlite3_step(stmt);
       if (ret == SQLITE_DONE) {
-        spdlog::error("{}", sqlite3_errmsg(conn));
+        console->error("{}", sqlite3_errmsg(conn));
         sqlite3_finalize(stmt);
         return false;
       }
@@ -267,14 +265,14 @@ int delete_record_by_id(const std::string &id) {
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     return -1;
   }
   sqlite3_bind_text(stmt, 1, id.data(), (int)id.size(), nullptr);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     sqlite3_finalize(stmt);
     return -1;
   }
@@ -288,7 +286,7 @@ int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey, std::t
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     return -1;
   }
   sqlite3_bind_int(stmt, 1, kind);
@@ -297,7 +295,7 @@ int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey, std::t
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     sqlite3_finalize(stmt);
     return -1;
   }
@@ -315,7 +313,7 @@ int delete_record_by_kind_and_pubkey_and_dtag(
   auto ret =
       sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     return -1;
   }
 
@@ -352,7 +350,7 @@ int delete_record_by_kind_and_pubkey_and_dtag(
   stmt = nullptr;
   ret = sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
   if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     return -1;
   }
   for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
@@ -361,7 +359,7 @@ int delete_record_by_kind_and_pubkey_and_dtag(
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     sqlite3_finalize(stmt);
     return -1;
   }
@@ -373,18 +371,18 @@ int delete_record_by_kind_and_pubkey_and_dtag(
 static void sqlite3_trace_callback(void * /*user_data*/,
                                    const char *statement) {
   assert(statement);
-  spdlog::debug("{}", statement);
+  console->debug("{}", statement);
 }
 
 void storage_init(const std::string &dsn) {
-  spdlog::debug("initialize storage");
+  console->debug("initialize storage");
 
   auto ret = sqlite3_open_v2(dsn.c_str(), &conn,
                              SQLITE_OPEN_URI | SQLITE_OPEN_READWRITE |
                                  SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
                              nullptr);
   if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     exit(-1);
   }
   sqlite3_trace(conn, sqlite3_trace_callback, nullptr);
@@ -412,7 +410,7 @@ void storage_init(const std::string &dsn) {
   )";
   ret = sqlite3_exec(conn, sql, nullptr, nullptr, nullptr);
   if (ret != SQLITE_OK) {
-    spdlog::error("{}", sqlite3_errmsg(conn));
+    console->error("{}", sqlite3_errmsg(conn));
     exit(-1);
   }
 }

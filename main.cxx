@@ -1,3 +1,5 @@
+#define INITIALIZE_LOGGER
+
 #include "Headers.h"
 #include "cagliostr.hxx"
 #include "version.h"
@@ -7,9 +9,6 @@
 #include <random>
 
 #include <argparse/argparse.hpp>
-#include <spdlog/cfg/env.h>
-#include <spdlog/common.h>
-#include <spdlog/spdlog.h>
 
 typedef struct subscriber_t {
   std::string sub;
@@ -24,9 +23,9 @@ typedef struct client_t {
 } client_t;
 
 // global variables
-std::vector<subscriber_t> subscribers;
+static std::vector<subscriber_t> subscribers;
 
-std::string service_url;
+static std::string service_url;
 
 static const std::string realIP(ws28::Client *client) {
   client_t *ci = (client_t *)client->GetUserData();
@@ -72,7 +71,7 @@ static const bool check_auth_pubkey(ws28::Client *client, std::string pubkey) {
 static void relay_send(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
   const auto &s = data.dump();
-  spdlog::debug("{} << {}", realIP(client), s);
+  console->debug("{} << {}", realIP(client), s);
   client->Send(s.data(), s.size(), 1);
 }
 
@@ -176,7 +175,7 @@ static void do_relay_req(ws28::Client *client, const nlohmann::json &data) {
       }
       filters.push_back(filter);
     } catch (std::exception &e) {
-      spdlog::warn("!! {}", e.what());
+      console->warn("!! {}", e.what());
     }
   }
   if (filters.empty()) {
@@ -210,7 +209,7 @@ static void do_relay_count(ws28::Client *client, const nlohmann::json &data) {
       }
       filters.push_back(filter);
     } catch (std::exception &e) {
-      spdlog::warn("!! {}", e.what());
+      console->warn("!! {}", e.what());
     }
   }
   if (filters.empty()) {
@@ -382,7 +381,7 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
     nlohmann::json reply = {"OK", ev.id, true, ""};
     relay_send(client, reply);
   } catch (std::exception &e) {
-    spdlog::warn("!! {}", e.what());
+    console->warn("!! {}", e.what());
   }
 }
 
@@ -422,7 +421,7 @@ static void do_relay_auth(ws28::Client *client, const nlohmann::json &data) {
                             "error: failed to authenticate"};
     relay_send(client, reply);
   } catch (std::exception &e) {
-    spdlog::warn("!! {}", e.what());
+    console->warn("!! {}", e.what());
   }
 }
 
@@ -478,7 +477,7 @@ static auto nip11 = R"({
 
 static void http_request_callback(ws28::HTTPRequest &req,
                                   ws28::HTTPResponse &resp) {
-  spdlog::debug("{} >> {} {}", realIP(req), req.method, req.path);
+  console->debug("{} >> {} {}", realIP(req), req.method, req.path);
   resp.header("Access-Control-Allow-Origin", "*");
   if (req.method == "GET") {
     const auto accept = req.headers.Get("accept");
@@ -517,23 +516,23 @@ static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
       .challenge = challenge,
   };
   client->SetUserData(ci);
-  spdlog::debug("CONNECTED {}", ci->ip);
+  console->debug("CONNECTED {}", ci->ip);
 }
 
 static bool tcpcheck_callback(std::string_view /*ip*/, bool /*secure*/) {
-  // spdlog::debug("TCPCHECK {} {}", ip, secure);
+  // console->debug("TCPCHECK {} {}", ip, secure);
   return true;
 }
 
 static bool check_callback(ws28::Client * /*client*/, ws28::HTTPRequest &req) {
-  spdlog::debug("CHECK {}", realIP(req));
+  console->debug("CHECK {}", realIP(req));
   return true;
 }
 
 static void disconnect_callback(ws28::Client *client) {
   assert(client);
 
-  spdlog::debug("DISCONNECT {}", realIP(client));
+  console->debug("DISCONNECT {}", realIP(client));
   client_t *ci = (client_t *)client->GetUserData();
   if (ci != nullptr)
     delete ci;
@@ -562,7 +561,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
   }
 
   std::string s(data, len);
-  spdlog::debug("{} >> {}", realIP(client), s);
+  console->debug("{} >> {}", realIP(client), s);
   try {
     const auto payload = nlohmann::json::parse(s);
 
@@ -608,7 +607,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
     }
     relay_notice(client, payload[1], "error: invalid request");
   } catch (std::exception &e) {
-    spdlog::warn("!! {}", e.what());
+    console->warn("!! {}", e.what());
     relay_notice(client, std::string("error: ") + e.what());
   }
 
@@ -621,7 +620,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
 static void signal_handler(uv_signal_t *req, int /*signum*/) {
   assert(req);
   uv_signal_stop(req);
-  spdlog::warn("!! SIGINT");
+  console->warn("!! SIGINT");
   for (auto &s : subscribers) {
     if (s.client == nullptr) {
       continue;
@@ -654,7 +653,7 @@ static void server(short port) {
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(port);
-  spdlog::info("server started :{}", port);
+  console->info("server started :{}", port);
 
   uv_signal_t sig;
   uv_signal_init(loop, &sig);
@@ -696,9 +695,10 @@ int main(int argc, char *argv[]) {
 
   nip11["version"] = VERSION;
 
-  spdlog::cfg::load_env_levels();
   spdlog::set_level(
       spdlog::level::from_str(program.get<std::string>("-loglevel")));
+  spdlog::set_pattern("[%Y-%m-%d %H:%M:%S] [%^%l%$] %v");
+
   storage_init(program.get<std::string>("-database"));
   service_url = program.get<std::string>("-service-url");
 

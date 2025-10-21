@@ -1,5 +1,7 @@
 // clang-format off
 
+#define INITIALIZE_LOGGER
+
 #include <picotest.h>
 #undef ok
 #define CAGLIOSTR_TEST
@@ -10,7 +12,7 @@
 
 #include <filesystem>
 
-static event_t string2event(auto &string) {
+static event_t string2event(const std::string& string) {
   auto ej = nlohmann::json::parse(string);
   event_t ev;
   ev.id = ej["id"];
