@@ -394,15 +394,19 @@ static void do_relay_auth(ws28::Client *client, const nlohmann::json &data) {
       return;
     }
 
+    auto cc = challenge(client);
     auto ok = 0;
     for (const auto &tag : ev.tags) {
       if (tag.size() < 2)
         continue;
       if (tag[0] == "challenge") {
-        if (tag[1] == challenge(client))
+        if (tag[1] == cc)
           ok++;
       }
       if (tag[0] == "relay") {
+        auto s = tag[1];
+        while (s.ends_with('/'))
+          s.erase(s.find_last_not_of('/') + 1);
         if (tag[1] == service_url)
           ok++;
       }
