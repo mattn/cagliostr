@@ -405,8 +405,7 @@ static void do_relay_auth(ws28::Client *client, const nlohmann::json &data) {
       }
       if (tag[0] == "relay") {
         auto s = tag[1];
-        while (s.ends_with('/'))
-          s.erase(s.find_last_not_of('/') + 1);
+        while (!s.empty() && s.back() == '/') s.pop_back();
         if (s == service_url)
           ok++;
       }
