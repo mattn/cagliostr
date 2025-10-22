@@ -5,6 +5,8 @@ WORKDIR /usr/src/app
 RUN apt update && apt install -y g++ libsqlite3-dev libssl-dev cmake make git
 COPY . /usr/src/app
 RUN git submodule update --init --recursive --recommend-shallow --depth 1
+# patch ws28
+RUN sed -i '/if(client->GetIP/s/^/\/\//' deps/matheus28-ws28/src/Server.cpp
 RUN mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make cagliostr
 FROM debian:trixie-slim AS build-run
 RUN apt update && apt install -y libsqlite3-0 libssl3 libtcmalloc-minimal4 && apt clean
