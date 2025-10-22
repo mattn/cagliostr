@@ -55,13 +55,13 @@ static const std::string challenge(ws28::Client *client) {
   return "";
 }
 
-static const void set_auth_pubkey(ws28::Client *client, std::string pubkey) {
+static void set_auth_pubkey(ws28::Client *client, std::string pubkey) {
   client_t *ci = (client_t *)client->GetUserData();
   if (ci != nullptr)
     ci->pubkey = pubkey;
 }
 
-static const bool check_auth_pubkey(ws28::Client *client, std::string pubkey) {
+static bool check_auth_pubkey(ws28::Client *client, std::string pubkey) {
   client_t *ci = (client_t *)client->GetUserData();
   if (ci != nullptr)
     return ci->pubkey == pubkey;
