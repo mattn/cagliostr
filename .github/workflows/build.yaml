@@ -23,9 +23,9 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get -qq update
-        sudo apt-get install -y --no-install-recommends g++-11
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 20
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 20
+        sudo apt-get install -y --no-install-recommends g++-12
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 20
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 20
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
