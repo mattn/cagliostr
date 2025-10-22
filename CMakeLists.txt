@@ -38,6 +38,20 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/buil
 
 #--------------------------------------------------
 # cagliostr-core
+set_property(GLOBAL APPEND PROPERTY ADDITIONAL_CLEAN_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/CMakeFiles"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/Makefile"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/cmake_install.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build/CMakeFiles"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build/Makefile"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build/cmake_install.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/CMakeFiles"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/Makefile"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/cmake_install.cmake"
+)
+
+#--------------------------------------------------
+# cagliostr-core
 set (t_ cagliostr-core)
 
 include_directories(
@@ -81,3 +95,4 @@ target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 enable_testing()
 add_test(test cagliostr-test)
+
