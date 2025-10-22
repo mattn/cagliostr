@@ -649,7 +649,7 @@ static void server(short port) {
   server.SetClientConnectedCallback(connect_callback);
   server.SetClientDisconnectedCallback(disconnect_callback);
   server.SetCheckTCPConnectionCallback(tcpcheck_callback);
-  server.SetMaxMessageSize(65535);
+  server.SetMaxMessageSize(1024 * 1024);
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(port);
