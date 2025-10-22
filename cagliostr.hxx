@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 typedef struct event_t {
   std::string id;
