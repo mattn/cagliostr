@@ -5,7 +5,7 @@ include(CheckLibraryExists)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++20 -Wall -Wextra ${CMAKE_C_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -std=c++20 -Wall -Wextra ${CMAKE_C_FLAGS}")
