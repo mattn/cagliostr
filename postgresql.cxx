@@ -1,9 +1,9 @@
 #include "cagliostr.hxx"
 #include <iostream>
+#include <nlohmann/json.hpp>
+#include <pqxx/pqxx>
 #include <string>
 #include <vector>
-#include <pqxx/pqxx>
-#include <nlohmann/json.hpp>
 
 static pqxx::connection *conn;
 
@@ -31,10 +31,10 @@ static std::string join(const std::vector<std::string> &v,
   return s;
 }
 
-static bool insert_record(const event_t& ev) {
+static bool insert_record(const event_t &ev) {
   try {
     nlohmann::json jtags = nlohmann::json::array();
-    for (const auto& tag : ev.tags) {
+    for (const auto &tag : ev.tags) {
       jtags.push_back(nlohmann::json(tag));
     }
     std::string tags_str = jtags.dump();
@@ -45,11 +45,11 @@ static bool insert_record(const event_t& ev) {
         id, pubkey, created_at, kind, tags, content, sig)
 	    VALUES ($1, $2, $3, $4, $5, $6, $7)
 	    ON CONFLICT (id) DO NOTHING)",
-      {ev.id, ev.pubkey, ev.created_at, ev.kind, tags_str, ev.content, ev.sig}
-    );
+                              {ev.id, ev.pubkey, ev.created_at, ev.kind,
+                               tags_str, ev.content, ev.sig});
     txn.commit();
     return r.affected_rows() > 0;
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     console->error("{}", e.what());
     exit(-1);
   }
@@ -81,22 +81,21 @@ static bool is_expired(std::vector<std::vector<std::string>> &tags) {
   return false;
 }
 
-static std::string make_placeholders(size_t n, int& pno) {
-    std::string placeholders;
-    for (size_t i = 0; i < n; ++i) {
-        placeholders += "$" + std::to_string(pno + i + 1);
-        if (i < n - 1) {
-            placeholders += ",";
-        }
+static std::string make_placeholders(size_t n, int &pno) {
+  std::string placeholders;
+  for (size_t i = 0; i < n; ++i) {
+    placeholders += "$" + std::to_string(pno + i + 1);
+    if (i < n - 1) {
+      placeholders += ",";
     }
-    pno += n;
-    return placeholders;
+  }
+  pno += n;
+  return placeholders;
 }
 
-
 static bool send_records(std::function<void(const nlohmann::json &)> sender,
-                  const std::string &sub, const std::vector<filter_t> &filters,
-                  bool do_count) {
+                         const std::string &sub,
+                         const std::vector<filter_t> &filters, bool do_count) {
   auto count = 0;
   for (const auto &filter : filters) {
     std::string sql;
@@ -162,7 +161,8 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         for (decltype(tag.size()) i = 0; i < tag.size(); i++) {
           params.append(tag[i]);
         }
-        match.push_back(R"(tagvalues && ARRAY[)" + make_placeholders(tag.size(), pno)+"]");
+        match.push_back(R"(tagvalues && ARRAY[)" +
+                        make_placeholders(tag.size(), pno) + "]");
       }
       if (match.size() == 1) {
         conditions.push_back(match.front());
@@ -185,7 +185,8 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     }
     if (!filter.search.empty()) {
       params.append("%" + escape(filter.search) + "%");
-      conditions.push_back(R"(content LIKE $)" + std::to_string(++pno) + R"( ESCAPE '\')");
+      conditions.push_back(R"(content LIKE $)" + std::to_string(++pno) +
+                           R"( ESCAPE '\')");
     }
     if (!conditions.empty()) {
       sql += " WHERE " + join(conditions, " AND ");
@@ -202,13 +203,13 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (do_count) {
       count += r.one_field().as<int>();
     } else {
-      for (const auto& row : r) {
+      for (const auto &row : r) {
         nlohmann::json ej;
         ej["id"] = row["id"].c_str();
         ej["pubkey"] = row["pubkey"].c_str();
         ej["created_at"] = row["created_at"].as<int>();
         ej["kind"] = row["kind"].as<int>();
-        const char* j = row["tags"].c_str();
+        const char *j = row["tags"].c_str();
         ej["tags"] = nlohmann::json::parse(j);
         ej["content"] = row["content"].c_str();
         ej["sig"] = row["sig"].c_str();
@@ -243,40 +244,45 @@ static int delete_record_by_id(const std::string &id) {
     pqxx::result r = txn.exec(sql, pqxx::params{id});
     txn.commit();
     return r.affected_rows();
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     console->error("{}", e.what());
     return -1;
   }
 }
 
-static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey, std::time_t created_at) {
-  const auto sql = R"(DELETE FROM event WHERE kind = $1 AND pubkey = $2 AND created_at < $3)";
+static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey,
+                                            std::time_t created_at) {
+  const auto sql =
+      R"(DELETE FROM event WHERE kind = $1 AND pubkey = $2 AND created_at < $3)";
   pqxx::work txn(*conn);
   try {
     pqxx::result r = txn.exec(sql, pqxx::params{kind, pubkey, created_at});
+    txn.commit();
     return r.affected_rows();
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     console->error("{}", e.what());
     return -1;
   }
 }
 
-static int delete_record_by_kind_and_pubkey_and_dtag(
-    int kind, const std::string &pubkey, const std::vector<std::string> &tag, std::time_t created_at) {
+static int
+delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
+                                          const std::vector<std::string> &tag,
+                                          std::time_t created_at) {
   std::string sql =
       R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ? AND created_at < ?)";
 
   nlohmann::json data = tag;
 
   pqxx::work txn(*conn);
-  pqxx::result r = txn.exec(
-    "SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags::text LIKE $3 AND created_at < $4",
-    {kind, pubkey, "%" + escape(data.dump()) + "%", created_at}
-  );
+  pqxx::result r =
+      txn.exec("SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND "
+               "tags::text LIKE $3 AND created_at < $4",
+               {kind, pubkey, "%" + escape(data.dump()) + "%", created_at});
   data.clear();
 
   std::vector<std::string> ids;
-  for (const auto& row : r) {
+  for (const auto &row : r) {
     ids.push_back(row["id"].c_str());
   }
 
@@ -297,14 +303,14 @@ static int delete_record_by_kind_and_pubkey_and_dtag(
     params.append(ids[i]);
   }
   r = txn.exec(
-    pqxx::prepped{ "DELETE FROM event WHERE id in (" + condition + ")"},
-    params
-  );
+      pqxx::prepped{"DELETE FROM event WHERE id in (" + condition + ")"},
+      params);
 
+  txn.commit();
   return r.affected_rows();
 }
 
-static void storage_init(const std::string& dsn) {
+static void storage_init(const std::string &dsn) {
   console->debug("initialize storage");
 
   try {
@@ -342,23 +348,21 @@ static void storage_init(const std::string& dsn) {
       CREATE INDEX IF NOT EXISTS arbitrarytagvalues ON event USING gin (tagvalues);
     )");
     txn.commit();
-  } catch (const std::exception& e) {
-    console->error("{}",  e.what());
+  } catch (const std::exception &e) {
+    console->error("{}", e.what());
     exit(-1);
   }
 }
 
-static void storage_deinit() {
-  conn->close();
-}
+static void storage_deinit() { conn->close(); }
 
-void storage_context_init_postgresql(storage_context& ctx) {
+void storage_context_init_postgresql(storage_context &ctx) {
   ctx.init = storage_init;
   ctx.deinit = storage_deinit;
   ctx.insert_record = insert_record;
   ctx.delete_record_by_id = delete_record_by_id;
   ctx.delete_record_by_kind_and_pubkey = delete_record_by_kind_and_pubkey;
-  ctx.delete_record_by_kind_and_pubkey_and_dtag = delete_record_by_kind_and_pubkey_and_dtag;
+  ctx.delete_record_by_kind_and_pubkey_and_dtag =
+      delete_record_by_kind_and_pubkey_and_dtag;
   ctx.send_records = send_records;
 }
-
