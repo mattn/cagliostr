@@ -22,3 +22,9 @@
 [submodule "deps/h2o-picotest"]
 	path = deps/h2o-picotest
 	url = https://github.com/h2o/picotest
+[submodule "deps/tv-libpqxx"]
+	path = deps/tv-libpqxx
+	url = https://github.com/jtv/libpqxx
+[submodule "deps/jtv-libpqxx"]
+	path = deps/jtv-libpqxx
+	url = https://github.com/jtv/libpqxx

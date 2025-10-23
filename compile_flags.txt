@@ -14,4 +14,8 @@ deps/gabime-spdlog/include
 -I
 deps/p-ranav-argparse/include
 -I
+deps/jtv-libpqxx/include
+-I
+deps/jtv-libpqxx/build/include
+-I
 deps/h2o-picotest

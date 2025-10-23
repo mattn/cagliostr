@@ -23,7 +23,7 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get -qq update
-        sudo apt-get install -y --no-install-recommends g++-12
+        sudo apt-get install -y --no-install-recommends g++-12 libpq-dev
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 20
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 20
 

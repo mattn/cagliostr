@@ -27,6 +27,8 @@ static std::vector<subscriber_t> subscribers;
 
 static std::string service_url;
 
+static storage_context_t storage_ctx;
+
 static const std::string realIP(ws28::Client *client) {
   client_t *ci = (client_t *)client->GetUserData();
   if (ci != nullptr)
@@ -186,7 +188,7 @@ static void do_relay_req(ws28::Client *client, const nlohmann::json &data) {
   }
   subscribers.push_back({.sub = sub, .client = client, .filters = filters});
 
-  send_records([&](const nlohmann::json &data) { relay_send(client, data); },
+  storage_ctx.send_records([&](const nlohmann::json &data) { relay_send(client, data); },
                sub, filters, false);
   const auto reply = nlohmann::json::array({"EOSE", sub});
   relay_send(client, reply);
@@ -219,7 +221,7 @@ static void do_relay_count(ws28::Client *client, const nlohmann::json &data) {
     return;
   }
 
-  send_records([&](const nlohmann::json &data) { relay_send(client, data); },
+  storage_ctx.send_records([&](const nlohmann::json &data) { relay_send(client, data); },
                sub, filters, true);
 }
 
@@ -339,7 +341,7 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
       for (const auto &tag : ev.tags) {
         if (tag.size() >= 2 && tag[0] == "e") {
           for (size_t i = 1; i < tag.size(); i++) {
-            if (delete_record_by_id(tag[i]) < 0) {
+            if (storage_ctx.delete_record_by_id(tag[i]) < 0) {
               return;
             }
           }
@@ -350,7 +352,7 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
         return;
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
-        if (delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey,
+        if (storage_ctx.delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey,
                                              ev.created_at) < 0) {
           return;
         }
@@ -358,7 +360,7 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
         std::string d;
         for (const auto &tag : ev.tags) {
           if (tag.size() >= 2 && tag[0] == "d") {
-            if (delete_record_by_kind_and_pubkey_and_dtag(
+            if (storage_ctx.delete_record_by_kind_and_pubkey_and_dtag(
                     ev.kind, ev.pubkey, tag, ev.created_at) < 0) {
               return;
             }
@@ -366,7 +368,7 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
         }
       }
 
-      if (insert_record(ev) != 1) {
+      if (storage_ctx.insert_record(ev) != 1) {
         relay_notice(client, "error: duplicate event");
         return;
       }
@@ -699,10 +701,18 @@ int main(int argc, char *argv[]) {
       spdlog::level::from_str(program.get<std::string>("-loglevel")));
   spdlog::set_pattern("[%Y-%m-%d %H:%M:%S] [%^%l%$] %v");
 
-  storage_init(program.get<std::string>("-database"));
+  std::string prefix = "postgres://";
+  auto database = program.get<std::string>("-database");
+  if (!database.compare(0, prefix.size(), prefix)) {
+    storage_context_init_postgresql(storage_ctx);
+  } else {
+    storage_context_init_sqlite3(storage_ctx);
+  }
+
+  storage_ctx.init(database);
   service_url = program.get<std::string>("-service-url");
 
   server(program.get<short>("-port"));
-  storage_deinit();
+  storage_ctx.deinit();
   return 0;
 }

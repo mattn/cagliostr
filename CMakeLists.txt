@@ -37,6 +37,24 @@ add_custom_command(
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/src)
 
 #--------------------------------------------------
+# libpqxx
+set(LIBPQXX_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/src/libpqxx.a)
+add_custom_target(libpqxx DEPENDS ${LIBPQXX_LIBRARIES})
+#target_compile_definitions(${LIBPQXX_LIBRARIES} PRIVATE PQXX_STATIC)
+add_compile_definitions(PQXX_STATIC)
+add_custom_command(
+    OUTPUT ${LIBPQXX_LIBRARIES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx
+    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off
+    COMMAND ${CMAKE_COMMAND} --build build -t pqxx
+)
+include_directories(
+    ${t_}
+    ${PROJECT_SOURCE_DIR}/deps/jtv-libpqxx/build/include
+)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/deps/jtv-libpqxx/build/src)
+
+#--------------------------------------------------
 # cagliostr-core
 set_property(GLOBAL APPEND PROPERTY ADDITIONAL_CLEAN_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/CMakeFiles"
@@ -63,16 +81,20 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/include
     ${PROJECT_SOURCE_DIR}/deps/gabime-spdlog/include
     ${PROJECT_SOURCE_DIR}/deps/p-ranav-argparse/include
+    ${PROJECT_SOURCE_DIR}/deps/jtv-libpqxx/include
 )
 add_library (${t_} INTERFACE)
 add_dependencies(${t_} libuv)
 add_dependencies(${t_} libsecp256k1)
 add_dependencies(${t_} libspdlog)
+add_dependencies(${t_} libpqxx)
 target_link_libraries(${t_} INTERFACE crypto)
 target_link_libraries(${t_} INTERFACE ssl)
 target_link_libraries(${t_} INTERFACE sqlite3)
 target_link_libraries(${t_} INTERFACE ${LIBUV_LIBRARIES})
+target_link_libraries(${t_} INTERFACE ${LIBPQXX_LIBRARIES})
 target_link_libraries(${t_} INTERFACE ${LIBSECP256K1_LIBRARIES})
+target_link_libraries(${t_} INTERFACE pq)
 if (WIN32)
 target_link_libraries(${t_} INTERFACE secur32 ws2_32 dbghelp userenv iphlpapi)
 endif()
@@ -80,7 +102,7 @@ endif()
 #--------------------------------------------------
 # cagliostr
 set (t_ cagliostr)
-add_executable(${t_} main.cxx records.cxx sign.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp)
+add_executable(${t_} main.cxx sqlite3.cxx postgresql.cxx sign.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp)
 target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 #--------------------------------------------------
@@ -90,7 +112,7 @@ include_directories(
     ${t_}
     ${PROJECT_SOURCE_DIR}/deps/h2o-picotest
 )
-add_executable(${t_} test.cxx ${PROJECT_SOURCE_DIR}/deps/h2o-picotest/picotest.c records.cxx sign.cxx)
+add_executable(${t_} test.cxx ${PROJECT_SOURCE_DIR}/deps/h2o-picotest/picotest.c sqlite3.cxx postgresql.cxx sign.cxx)
 target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 enable_testing()
