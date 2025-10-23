@@ -188,8 +188,9 @@ static void do_relay_req(ws28::Client *client, const nlohmann::json &data) {
   }
   subscribers.push_back({.sub = sub, .client = client, .filters = filters});
 
-  storage_ctx.send_records([&](const nlohmann::json &data) { relay_send(client, data); },
-               sub, filters, false);
+  storage_ctx.send_records(
+      [&](const nlohmann::json &data) { relay_send(client, data); }, sub,
+      filters, false);
   const auto reply = nlohmann::json::array({"EOSE", sub});
   relay_send(client, reply);
 }
@@ -221,8 +222,9 @@ static void do_relay_count(ws28::Client *client, const nlohmann::json &data) {
     return;
   }
 
-  storage_ctx.send_records([&](const nlohmann::json &data) { relay_send(client, data); },
-               sub, filters, true);
+  storage_ctx.send_records(
+      [&](const nlohmann::json &data) { relay_send(client, data); }, sub,
+      filters, true);
 }
 
 static void do_relay_close(ws28::Client *client, const nlohmann::json &data) {
@@ -353,7 +355,7 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
         if (storage_ctx.delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey,
-                                             ev.created_at) < 0) {
+                                                         ev.created_at) < 0) {
           return;
         }
       } else if (30000 <= ev.kind && ev.kind < 40000) {
@@ -406,7 +408,8 @@ static void do_relay_auth(ws28::Client *client, const nlohmann::json &data) {
       }
       if (tag[0] == "relay") {
         auto s = tag[1];
-        while (!s.empty() && s.back() == '/') s.pop_back();
+        while (!s.empty() && s.back() == '/')
+          s.pop_back();
         if (s == service_url)
           ok++;
       }

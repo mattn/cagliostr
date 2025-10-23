@@ -4,7 +4,6 @@
 
 #include <sqlite3.h>
 
-
 // global variables
 static sqlite3 *conn = nullptr;
 
@@ -90,8 +89,8 @@ static bool is_expired(std::vector<std::vector<std::string>> &tags) {
 }
 
 static bool send_records(std::function<void(const nlohmann::json &)> sender,
-                  const std::string &sub, const std::vector<filter_t> &filters,
-                  bool do_count) {
+                         const std::string &sub,
+                         const std::vector<filter_t> &filters, bool do_count) {
   auto count = 0;
   for (const auto &filter : filters) {
     std::string sql;
@@ -283,8 +282,10 @@ static int delete_record_by_id(const std::string &id) {
   return sqlite3_changes(conn);
 }
 
-static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey, std::time_t created_at) {
-  const auto sql = R"(DELETE FROM event WHERE kind = ? AND pubkey = ? AND created_at < ?)";
+static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey,
+                                            std::time_t created_at) {
+  const auto sql =
+      R"(DELETE FROM event WHERE kind = ? AND pubkey = ? AND created_at < ?)";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
   if (ret != SQLITE_OK) {
@@ -306,8 +307,10 @@ static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey,
   return sqlite3_changes(conn);
 }
 
-static int delete_record_by_kind_and_pubkey_and_dtag(
-    int kind, const std::string &pubkey, const std::vector<std::string> &tag, std::time_t created_at) {
+static int
+delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
+                                          const std::vector<std::string> &tag,
+                                          std::time_t created_at) {
   std::string sql =
       R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ? AND created_at < ?)";
 
@@ -417,17 +420,15 @@ static void storage_init(const std::string &dsn) {
   }
 }
 
-static void storage_deinit() {
-  sqlite3_close_v2(conn);
-}
+static void storage_deinit() { sqlite3_close_v2(conn); }
 
-void storage_context_init_sqlite3(storage_context& ctx) {
+void storage_context_init_sqlite3(storage_context &ctx) {
   ctx.init = storage_init;
   ctx.deinit = storage_deinit;
   ctx.insert_record = insert_record;
   ctx.delete_record_by_id = delete_record_by_id;
   ctx.delete_record_by_kind_and_pubkey = delete_record_by_kind_and_pubkey;
-  ctx.delete_record_by_kind_and_pubkey_and_dtag = delete_record_by_kind_and_pubkey_and_dtag;
+  ctx.delete_record_by_kind_and_pubkey_and_dtag =
+      delete_record_by_kind_and_pubkey_and_dtag;
   ctx.send_records = send_records;
 }
-
