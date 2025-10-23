@@ -195,7 +195,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       sql += " ORDER BY created_at DESC LIMIT " + std::to_string(limit);
     }
 
-    std::cout << "Final SQL: " << sql << std::endl;
+    console->debug("SQL: {}", sql);
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(sql, params);
     txn.commit();

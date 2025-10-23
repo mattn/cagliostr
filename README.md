@@ -14,6 +14,7 @@ Optional arguments:
   -h, --help          shows help message and exits 
   -v, --version       prints version information and exits 
   -database DATABASE  connection string [default: "./cagliostr.sqlite"]
+                      PostgreSQL is used if the value starts with postgres://.
   -loglevel LEVEL     log level [default: "info"]
 ```
 
@@ -21,6 +22,7 @@ Optional arguments:
 
 * OpenSSL
 * libsqlite3
+* libpq
 
 ## Installation
 
