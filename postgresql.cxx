@@ -81,10 +81,6 @@ static bool is_expired(std::vector<std::vector<std::string>> &tags) {
   return false;
 }
 
-static std::string pno(size_t n) {
-  return "$" + std::to_string(n + 1);
-}
-
 static std::string make_placeholders(size_t n, int& pno) {
     std::string placeholders;
     for (size_t i = 0; i < n; ++i) {
