@@ -40,7 +40,7 @@ static const std::string realIP(ws28::HTTPRequest &req) {
   std::string ip{req.ip};
   auto value = req.headers.Get("x-forwarded-for");
   if (value.has_value()) {
-    ip = value.value(); // possible to be multiple comma separated
+    ip = value.value().substr(0, value.value().find(','));
   } else {
     value = req.headers.Get("x-real-ip");
     if (value.has_value()) {
