@@ -98,6 +98,15 @@ target_link_libraries(${t_} INTERFACE pq)
 if (WIN32)
 target_link_libraries(${t_} INTERFACE secur32 ws2_32 dbghelp userenv iphlpapi)
 endif()
+if(MINGW)
+    target_link_libraries(${t_} INTERFACE
+        pgcommon
+        pgport
+        intl
+    )
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+endif()
 
 #--------------------------------------------------
 # cagliostr
@@ -117,4 +126,3 @@ target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 enable_testing()
 add_test(test cagliostr-test)
-
