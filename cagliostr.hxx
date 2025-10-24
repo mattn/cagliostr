@@ -1,10 +1,6 @@
 #ifndef _CAGLIOSTR_H_
 #define _CAGLIOSTR_H_
 
-#include <algorithm>
-#include <exception>
-#include <iostream>
-#include <sstream>
 #include <string>
 #if defined(__GLIBC__)
 #include <malloc.h>
@@ -54,6 +50,19 @@ void storage_context_init_sqlite3(storage_context &);
 void storage_context_init_postgresql(storage_context &);
 
 bool check_event(const event_t &);
+
+inline std::string escape(const std::string &data) {
+  std::string result;
+  for (const auto c : data) {
+    switch (c) {
+      case '%': result += "%"; break;;
+      case '\'': result += "''"; break;;
+      case '\\': result += "\\\\"; break;;
+      default: result += c; break;
+    }
+  }
+  return result;
+}
 
 #ifdef INITIALIZE_LOGGER
 auto console = spdlog::stdout_color_mt("cagliostr");

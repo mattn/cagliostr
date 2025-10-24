@@ -1,4 +1,8 @@
 #include "cagliostr.hxx"
+#include <ctime>
+#include <sstream>
+#include <iostream>
+#include <sstream>
 
 #include <openssl/evp.h>
 

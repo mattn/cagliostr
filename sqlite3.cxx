@@ -1,6 +1,8 @@
 #include "cagliostr.hxx"
 #include <ctime>
 #include <sstream>
+#include <iostream>
+#include <sstream>
 
 #include <sqlite3.h>
 
@@ -60,17 +62,6 @@ static bool insert_record(const event_t &ev) {
   sqlite3_finalize(stmt);
 
   return true;
-}
-
-static std::string escape(const std::string &data) {
-  std::string result;
-  for (const auto c : data) {
-    if (c == '%') {
-      result.push_back('%');
-    }
-    result.push_back(c);
-  }
-  return result;
 }
 
 static bool is_expired(std::vector<std::vector<std::string>> &tags) {

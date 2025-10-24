@@ -74,6 +74,20 @@ static void test_cagliostr_records() {
   storage_ctx.deinit();
 }
 
+static void test_sql_injection_protection() {
+  std::string malicious_input = "1; DROP TABLE event; --";
+  std::string escaped_input = escape(malicious_input);
+  _ok(escaped_input == "1%; DROP TABLE event; --", "SQL injection protection failed");
+  _ok(escaped_input.find("DROP TABLE") != std::string::npos, "SQL injection protection failed");
+  _ok(escaped_input.find("'") == std::string::npos, "SQL injection protection failed");
+  _ok(escaped_input.find("\\") == std::string::npos, "SQL injection protection failed");
+  _ok(escaped_input.find("%") != std::string::npos, "SQL injection protection failed");
+  _ok(escaped_input == "1%; DROP TABLE event; --", "SQL injection protection failed");
+}
+
+static void test_ip_parsing() {
+}
+
 static void test_cagliostr_sign() {
   event_t ev;
 
@@ -91,5 +105,7 @@ int main() {
 
   subtest("test_cagliostr_records", test_cagliostr_records);
   subtest("test_cagliostr_sign", test_cagliostr_sign);
+  subtest("test_sql_injection_protection", test_sql_injection_protection);
+  subtest("test_ip_parsing", test_ip_parsing);
   return done_testing();
 }

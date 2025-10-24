@@ -55,17 +55,6 @@ static bool insert_record(const event_t &ev) {
   }
 }
 
-static std::string escape(const std::string &data) {
-  std::string result;
-  for (const auto c : data) {
-    if (c == '%') {
-      result.push_back('%');
-    }
-    result.push_back(c);
-  }
-  return result;
-}
-
 static bool is_expired(std::vector<std::vector<std::string>> &tags) {
   time_t now = time(nullptr), expiration;
   for (const auto &tag : tags) {
