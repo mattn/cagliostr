@@ -75,14 +75,16 @@ static void test_cagliostr_records() {
 }
 
 static void test_sql_injection_protection() {
-  std::string malicious_input = "1; DROP TABLE event; --";
-  std::string escaped_input = escape(malicious_input);
-  _ok(escaped_input == "1%; DROP TABLE event; --", "SQL injection protection failed");
-  _ok(escaped_input.find("DROP TABLE") != std::string::npos, "SQL injection protection failed");
-  _ok(escaped_input.find("'") == std::string::npos, "SQL injection protection failed");
-  _ok(escaped_input.find("\\") == std::string::npos, "SQL injection protection failed");
-  _ok(escaped_input.find("%") != std::string::npos, "SQL injection protection failed");
-  _ok(escaped_input == "1%; DROP TABLE event; --", "SQL injection protection failed");
+  _ok(escape_percent("x%x") == "x\\%x", "basic percent escape");
+  _ok(escape_percent("abc") == "abc", "no percent remains unchanged");
+  _ok(escape_percent("%abc") == "\\%abc", "leading percent escape");
+  _ok(escape_percent("abc%") == "abc\\%", "trailing percent escape");
+  _ok(escape_percent("x%y%z") == "x\\%y\\%z", "multiple percents escape");
+  _ok(escape_percent("%%") == "\\%\\%", "consecutive percents escape");
+  _ok(escape_percent("") == "", "empty string unchanged");
+  _ok(escape_percent("a_b_c") == "a_b_c", "other characters unchanged");
+  _ok(escape_percent("100%") == "100\\%", "percent in number context");
+  _ok(escape_percent("test%x injection") == "test\\%x injection", "injection-like string escapes percent");
 }
 
 static void test_ip_parsing() {

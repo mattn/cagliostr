@@ -174,7 +174,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.append("%" + escape(filter.search) + "%");
+      params.append("%" + escape_percent(filter.search) + "%");
       conditions.push_back(R"(content LIKE $)" + std::to_string(++pno) +
                            R"( ESCAPE '\')");
     }
@@ -267,7 +267,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   pqxx::result r =
       txn.exec("SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND "
                "tags::text LIKE $3 AND created_at < $4",
-               {kind, pubkey, "%" + escape(data.dump()) + "%", created_at});
+               {kind, pubkey, "%" + escape_percent(data.dump()) + "%", created_at});
   data.clear();
 
   std::vector<std::string> ids;

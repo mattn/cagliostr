@@ -147,7 +147,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
           nlohmann::json data = {first, tag[i]};
           params.push_back(
-              {.t = PARAM_TYPE_STRING, .s = "%" + escape(data.dump()) + "%"});
+              {.t = PARAM_TYPE_STRING, .s = "%" + escape_percent(data.dump()) + "%"});
           match.push_back(R"(tags LIKE ? ESCAPE '\')");
         }
       }
@@ -172,7 +172,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     }
     if (!filter.search.empty()) {
       params.push_back(
-          {.t = PARAM_TYPE_STRING, .s = "%" + escape(filter.search) + "%"});
+          {.t = PARAM_TYPE_STRING, .s = "%" + escape_percent(filter.search) + "%"});
       conditions.push_back(R"(content LIKE ? ESCAPE '\')");
     }
     if (!conditions.empty()) {
@@ -305,7 +305,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
                                           const std::vector<std::string> &tag,
                                           std::time_t created_at) {
   std::string sql =
-      R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ? AND created_at < ?)";
+      R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ? ESCAPE '\' AND created_at < ?)";
 
   sqlite3_stmt *stmt = nullptr;
   auto ret =
@@ -316,7 +316,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   }
 
   nlohmann::json data = tag;
-  auto s = "%" + escape(data.dump()) + "%";
+  auto s = "%" + escape_percent(data.dump()) + "%";
   data.clear();
   sqlite3_bind_int(stmt, 1, kind);
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
