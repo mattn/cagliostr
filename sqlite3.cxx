@@ -35,7 +35,7 @@ static std::string join(const std::vector<std::string> &v,
 
 static bool insert_record(const event_t &ev) {
   const auto sql =
-      R"(INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) VALUES ($1, $2, $3, $4, $5, $6, $7))";
+      R"(INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) VALUES (?, ?. ?, ?, ?, ?, ?))";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, -1, &stmt, nullptr);
   if (ret != SQLITE_OK) {
