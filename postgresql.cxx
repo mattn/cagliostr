@@ -259,7 +259,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
                                           const std::vector<std::string> &tag,
                                           std::time_t created_at) {
   std::string sql =
-      R"(SELECT id FROM event WHERE kind = ? AND pubkey = ? AND tags LIKE ? AND created_at < ?)";
+      R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags::text LIKE $3 AND created_at < $4)";
 
   nlohmann::json data = tag;
 
