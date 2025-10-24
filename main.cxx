@@ -462,7 +462,7 @@ static auto nip11 = R"({
   "contact": "mattn.jp@gmail.com",
   "supported_nips": [1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40, 42, 45, 50, 70],
   "software": "https://github.com/mattn/cagliostr",
-  "version": "develop",
+  "version": ")" VERSION R"(",
   "limitation": {
     "max_message_length": 524288,
     "max_subscriptions": 20,
