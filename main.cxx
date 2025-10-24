@@ -137,9 +137,8 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
       filter.kinds.push_back(kind);
     }
   }
-  for (nlohmann::json::const_iterator it = data.begin(); it != data.end();
-       ++it) {
-    if (it.key().at(0) == '#' && it.value().is_array()) {
+  for (auto it = data.cbegin(); it != data.cend(); ++it) {
+    if (!it.key().empty() && it.key().front() == '#' && it.value().is_array()) {
       std::vector<std::string> tag = {it.key().c_str() + 1};
       for (const auto &v : it.value()) {
         tag.push_back(v);
@@ -176,8 +175,9 @@ static void do_relay_req(ws28::Client *client, const nlohmann::json &data) {
         continue;
       }
       filters.push_back(filter);
-    } catch (std::exception &e) {
-      console->warn("!! {}", e.what());
+    } catch (const std::exception &e) {
+      console->warn("!! Exception in make_filter: {}", e.what());
+      throw;
     }
   }
   if (filters.empty()) {
@@ -516,7 +516,7 @@ static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   auto challenge = generate_random_hex_16();
   nlohmann::json auth = {"AUTH", challenge};
   relay_send(client, auth);
-  client_t *ci = new client_t{
+  auto *ci = new client_t{
       .ip = realIP(req),
       .challenge = challenge,
       .pubkey = "",
@@ -617,7 +617,7 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
     relay_notice(client, std::string("error: ") + e.what());
   }
 
-#if defined(__GLIBC__)
+#if defined(__GLIBC__) && !defined(_WIN32)
   // FIXME https://github.com/nlohmann/json/issues/1924
   malloc_trim(0);
 #endif
