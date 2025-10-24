@@ -30,7 +30,7 @@ static std::string service_url;
 static storage_context_t storage_ctx;
 
 static const std::string realIP(ws28::Client *client) {
-  client_t *ci = (client_t *)client->GetUserData();
+  client_t *ci = static_cast<client_t*>(client->GetUserData());
   if (ci != nullptr)
     return ci->ip;
   return client->GetIP();
@@ -51,20 +51,20 @@ static const std::string realIP(ws28::HTTPRequest &req) {
 }
 
 static const std::string challenge(ws28::Client *client) {
-  client_t *ci = (client_t *)client->GetUserData();
+  client_t *ci = static_cast<client_t*>(client->GetUserData());
   if (ci != nullptr)
     return ci->challenge;
   return "";
 }
 
 static void set_auth_pubkey(ws28::Client *client, std::string pubkey) {
-  client_t *ci = (client_t *)client->GetUserData();
+  client_t *ci = static_cast<client_t*>(client->GetUserData());
   if (ci != nullptr)
     ci->pubkey = pubkey;
 }
 
 static bool check_auth_pubkey(ws28::Client *client, std::string pubkey) {
-  client_t *ci = (client_t *)client->GetUserData();
+  client_t *ci = static_cast<client_t*>(client->GetUserData());
   if (ci != nullptr)
     return ci->pubkey == pubkey;
   return false;
@@ -189,7 +189,7 @@ static void do_relay_req(ws28::Client *client, const nlohmann::json &data) {
   subscribers.push_back({.sub = sub, .client = client, .filters = filters});
 
   storage_ctx.send_records(
-      [&](const nlohmann::json &data) { relay_send(client, data); }, sub,
+      [&](const nlohmann::json &_data) { relay_send(client, _data); }, sub,
       filters, false);
   const auto reply = nlohmann::json::array({"EOSE", sub});
   relay_send(client, reply);
@@ -223,7 +223,7 @@ static void do_relay_count(ws28::Client *client, const nlohmann::json &data) {
   }
 
   storage_ctx.send_records(
-      [&](const nlohmann::json &data) { relay_send(client, data); }, sub,
+      [&](const nlohmann::json &_data) { relay_send(client, _data); }, sub,
       filters, true);
 }
 
@@ -519,6 +519,7 @@ static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   client_t *ci = new client_t{
       .ip = realIP(req),
       .challenge = challenge,
+      .pubkey = "",
   };
   client->SetUserData(ci);
   console->debug("CONNECTED {}", ci->ip);
@@ -538,7 +539,7 @@ static void disconnect_callback(ws28::Client *client) {
   assert(client);
 
   console->debug("DISCONNECT {}", realIP(client));
-  client_t *ci = (client_t *)client->GetUserData();
+  client_t *ci = static_cast<client_t*>(client->GetUserData());
   if (ci != nullptr)
     delete ci;
   auto it = subscribers.begin();
@@ -686,7 +687,7 @@ int main(int argc, char *argv[]) {
         .metavar("LEVEL")
         .nargs(1);
     program.add_argument("-port")
-        .default_value((short)7447)
+        .default_value(static_cast<short>(7447))
         .help("port number")
         .metavar("PORT")
         .scan<'i', short>()

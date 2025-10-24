@@ -5,10 +5,13 @@ include(CheckLibraryExists)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -std=c++20 -Wall -Wextra ${CMAKE_C_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -std=c++20 -Wall -Wextra ${CMAKE_C_FLAGS}")
+#set(CMAKE_CXX_STANDARD 20)
+#set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_FLAGS "-std=c++20 -Wall -Wextra -pedantic")
+set(CMAKE_CXX_FLAGS_DEBUG "-g3 -O0 -pg ${CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -Wextra ${CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g3 -Og -pg")
+set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -s -DNDEBUG -march=native")
 
 #--------------------------------------------------
 # libuv
@@ -38,7 +41,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/buil
 
 #--------------------------------------------------
 # libpqxx
-set(LIBPQXX_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/src/libpqxx.a)
+set(LIBPQXX_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/src/libpqxx-7.10.a)
 add_custom_target(libpqxx DEPENDS ${LIBPQXX_LIBRARIES})
 #target_compile_definitions(${LIBPQXX_LIBRARIES} PRIVATE PQXX_STATIC)
 add_compile_definitions(PQXX_STATIC)
