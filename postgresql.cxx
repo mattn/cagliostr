@@ -3,9 +3,10 @@
 #include <nlohmann/json.hpp>
 #include <pqxx/pqxx>
 #include <string>
+#include <memory>
 #include <vector>
 
-static pqxx::connection *conn;
+static std::unique_ptr<pqxx::connection> conn;
 
 #define PARAM_TYPE_NUMBER (0)
 #define PARAM_TYPE_STRING (1)
@@ -302,7 +303,7 @@ static void storage_init(const std::string &dsn) {
   console->debug("initialize storage");
 
   try {
-    conn = new pqxx::connection(dsn);
+    conn = std::unique_ptr<pqxx::connection>(new pqxx::connection(dsn));
     if (!conn->is_open()) {
       console->debug("unable to connect to database");
       exit(-1);
