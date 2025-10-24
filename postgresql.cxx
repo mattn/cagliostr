@@ -184,7 +184,6 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       sql += " ORDER BY created_at DESC LIMIT " + std::to_string(limit);
     }
 
-    console->debug("SQL: {}", sql);
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(sql, params);
     txn.commit();
@@ -308,6 +307,7 @@ static void storage_init(const std::string &dsn) {
       console->debug("unable to connect to database");
       exit(-1);
     }
+    conn->trace(stderr);
 
     pqxx::work txn(*conn);
     txn.exec(R"(
