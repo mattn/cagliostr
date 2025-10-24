@@ -181,9 +181,6 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (!do_count) {
       sql += " ORDER BY created_at DESC LIMIT ?";
     }
-    if (!do_count) {
-      sqlite3_bind_int(stmt, params.size() + 1, limit);
-    }
 
     sqlite3_stmt *stmt = nullptr;
     auto ret =
@@ -205,7 +202,9 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       }
     }
 
-    sqlite3_bind_int(stmt, params.size() + 1, limit);
+    if (!do_count) {
+      sqlite3_bind_int(stmt, params.size() + 1, limit);
+    }
     if (do_count) {
       ret = sqlite3_step(stmt);
       if (ret == SQLITE_DONE) {

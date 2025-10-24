@@ -1,6 +1,5 @@
 #include "cagliostr.hxx"
 #include <ctime>
-#include <sstream>
 #include <iostream>
 #include <sstream>
 
@@ -50,8 +49,14 @@ static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
 }
 
 bool check_event(const event_t &ev) {
-  nlohmann::json check = {0,       ev.pubkey, ev.created_at,
-                          ev.kind, ev.tags,   ev.content};
+  nlohmann::json check = nlohmann::json::array({
+      0,
+      ev.pubkey,
+      ev.created_at,
+      ev.kind,
+      ev.tags,
+      ev.content,
+  });
   auto dump = check.dump();
   check.clear();
 
