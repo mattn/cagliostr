@@ -12,11 +12,11 @@ static sqlite3 *conn = nullptr;
 #define PARAM_TYPE_NUMBER (0)
 #define PARAM_TYPE_STRING (1)
 
-typedef struct param_t {
+using param_t = struct {
   int t{};
   int n{};
   std::string s{};
-} param_t;
+};
 
 static std::string join(const std::vector<std::string> &v,
                         const char *delim = 0) {
@@ -415,7 +415,7 @@ static void storage_init(const std::string &dsn) {
 
 static void storage_deinit() { sqlite3_close_v2(conn); }
 
-void storage_context_init_sqlite3(storage_context &ctx) {
+void storage_context_init_sqlite3(storage_context_t &ctx) {
   ctx.init = storage_init;
   ctx.deinit = storage_deinit;
   ctx.insert_record = insert_record;

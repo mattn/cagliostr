@@ -41,7 +41,9 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/buil
 
 #--------------------------------------------------
 # libpqxx
-set(LIBPQXX_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/src/libpqxx.a)
+set(LIBPQXX_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build)
+#set(LIBPQXX_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/src/libpqxx.a)
+find_library(LIBPQXX_LIBRARIES NAMES pqxx PATHS ${LIBPQXX_BUILD_DIR}/src)
 add_custom_target(libpqxx DEPENDS ${LIBPQXX_LIBRARIES})
 #target_compile_definitions(${LIBPQXX_LIBRARIES} PRIVATE PQXX_STATIC)
 add_compile_definitions(PQXX_STATIC)

@@ -11,7 +11,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
-typedef struct event_t {
+using event_t = struct event_t {
   std::string id;
   std::string pubkey;
   std::time_t created_at;
@@ -19,9 +19,9 @@ typedef struct event_t {
   std::vector<std::vector<std::string>> tags;
   std::string content;
   std::string sig;
-} event_t;
+};
 
-typedef struct filter_t {
+using filter_t = struct filter_t {
   std::vector<std::string> ids{};
   std::vector<std::string> authors{};
   std::vector<int> kinds{};
@@ -30,9 +30,9 @@ typedef struct filter_t {
   std::time_t until{};
   int limit{500};
   std::string search;
-} filter_t;
+};
 
-typedef struct storage_context_t {
+using storage_context_t = struct storage_context_t {
   void (*init)(const std::string &);
   void (*deinit)();
   bool (*insert_record)(const event_t &);
@@ -44,10 +44,10 @@ typedef struct storage_context_t {
   bool (*send_records)(std::function<void(const nlohmann::json &)>,
                        const std::string &, const std::vector<filter_t> &,
                        bool);
-} storage_context;
+};
 
-void storage_context_init_sqlite3(storage_context &);
-void storage_context_init_postgresql(storage_context &);
+void storage_context_init_sqlite3(storage_context_t &);
+void storage_context_init_postgresql(storage_context_t &);
 
 bool check_event(const event_t &);
 

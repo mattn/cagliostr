@@ -10,17 +10,17 @@
 
 #include <argparse/argparse.hpp>
 
-typedef struct subscriber_t {
+using subscriber_t = struct {
   std::string sub;
   ws28::Client *client{};
   std::vector<filter_t> filters;
-} subscriber_t;
+};
 
-typedef struct client_t {
+using client_t = struct {
   std::string ip;
   std::string challenge;
   std::string pubkey;
-} client_t;
+};
 
 // global variables
 static std::vector<subscriber_t> subscribers;
@@ -713,10 +713,16 @@ int main(int argc, char *argv[]) {
     storage_context_init_sqlite3(storage_ctx);
   }
 
-  storage_ctx.init(database);
-  service_url = program.get<std::string>("-service-url");
+  try {
+    storage_ctx.init(database);
+  } catch (const std::exception &e) {
+    console->error("!! Failed to initialize database: {}", e.what());
+    return 1;
+  }
 
+  service_url = program.get<std::string>("-service-url");
   server(program.get<short>("-port"));
+
   storage_ctx.deinit();
   return 0;
 }

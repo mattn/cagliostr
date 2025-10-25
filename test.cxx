@@ -87,9 +87,6 @@ static void test_sql_injection_protection() {
   _ok(escape_percent("test%x injection") == "test\\%x injection", "injection-like string escapes percent");
 }
 
-static void test_ip_parsing() {
-}
-
 static void test_cagliostr_sign() {
   event_t ev;
 
@@ -108,6 +105,5 @@ int main() {
   subtest("test_cagliostr_records", test_cagliostr_records);
   subtest("test_cagliostr_sign", test_cagliostr_sign);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
-  subtest("test_ip_parsing", test_ip_parsing);
   return done_testing();
 }
