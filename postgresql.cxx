@@ -52,7 +52,7 @@ static bool insert_record(const event_t &ev) {
     return r.affected_rows() > 0;
   } catch (const std::exception &e) {
     console->error("{}", e.what());
-    exit(-1);
+    return false;
   }
 }
 
@@ -279,18 +279,15 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
     return 0;
   }
 
-  std::ostringstream os;
   std::string condition;
+  pqxx::params params;
   for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
-    condition += "?,";
+    condition += "$" + std::to_string(i + 1) + ",";
+    params.append(ids[i]);
   }
   condition.pop_back();
 
   pqxx::work txn2(*conn);
-  pqxx::params params;
-  for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
-    params.append(ids[i]);
-  }
   r = txn.exec(
       pqxx::prepped{"DELETE FROM event WHERE id in (" + condition + ")"},
       params);
@@ -344,7 +341,10 @@ static void storage_init(const std::string &dsn) {
   }
 }
 
-static void storage_deinit() { conn->close(); }
+static void storage_deinit() {
+  conn->close();
+  delete conn.release();
+}
 
 void storage_context_init_postgresql(storage_context &ctx) {
   ctx.init = storage_init;
