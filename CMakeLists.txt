@@ -41,23 +41,9 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/buil
 
 #--------------------------------------------------
 # libpqxx
-set(LIBPQXX_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build)
-#set(LIBPQXX_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/src/libpqxx.a)
-find_library(LIBPQXX_LIBRARIES NAMES pqxx PATHS ${LIBPQXX_BUILD_DIR}/src)
-add_custom_target(libpqxx DEPENDS ${LIBPQXX_LIBRARIES})
-#target_compile_definitions(${LIBPQXX_LIBRARIES} PRIVATE PQXX_STATIC)
+add_subdirectory(deps/jtv-libpqxx)
+set_target_properties(pqxx PROPERTIES BUILD_SHARED_LIBS OFF)
 add_compile_definitions(PQXX_STATIC)
-add_custom_command(
-    OUTPUT ${LIBPQXX_LIBRARIES}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx
-    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=off
-    COMMAND ${CMAKE_COMMAND} --build build -t pqxx
-)
-include_directories(
-    ${t_}
-    ${PROJECT_SOURCE_DIR}/deps/jtv-libpqxx/build/include
-)
-link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/deps/jtv-libpqxx/build/src)
 
 #--------------------------------------------------
 # cagliostr-core
@@ -71,6 +57,9 @@ set_property(GLOBAL APPEND PROPERTY ADDITIONAL_CLEAN_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/CMakeFiles"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/Makefile"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/cmake_install.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/CMakeFiles"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/Makefile"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/cmake_install.cmake"
 )
 
 #--------------------------------------------------
@@ -86,18 +75,16 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/include
     ${PROJECT_SOURCE_DIR}/deps/gabime-spdlog/include
     ${PROJECT_SOURCE_DIR}/deps/p-ranav-argparse/include
-    ${PROJECT_SOURCE_DIR}/deps/jtv-libpqxx/include
 )
 add_library (${t_} INTERFACE)
 add_dependencies(${t_} libuv)
 add_dependencies(${t_} libsecp256k1)
 add_dependencies(${t_} libspdlog)
-add_dependencies(${t_} libpqxx)
 target_link_libraries(${t_} INTERFACE crypto)
 target_link_libraries(${t_} INTERFACE ssl)
 target_link_libraries(${t_} INTERFACE sqlite3)
 target_link_libraries(${t_} INTERFACE ${LIBUV_LIBRARIES})
-target_link_libraries(${t_} INTERFACE ${LIBPQXX_LIBRARIES})
+target_link_libraries(${t_} INTERFACE pqxx)
 target_link_libraries(${t_} INTERFACE ${LIBSECP256K1_LIBRARIES})
 target_link_libraries(${t_} INTERFACE pq)
 if (WIN32)
