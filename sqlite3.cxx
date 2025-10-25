@@ -381,7 +381,7 @@ static void storage_init(const std::string &dsn) {
                              nullptr);
   if (ret != SQLITE_OK) {
     console->error("{}", sqlite3_errmsg(conn));
-    exit(-1);
+    throw std::runtime_error("unable to connect to database");
   }
   sqlite3_trace(conn, sqlite3_trace_callback, nullptr);
 
@@ -409,7 +409,7 @@ static void storage_init(const std::string &dsn) {
   ret = sqlite3_exec(conn, sql, nullptr, nullptr, nullptr);
   if (ret != SQLITE_OK) {
     console->error("{}", sqlite3_errmsg(conn));
-    exit(-1);
+    throw std::runtime_error("unable to connect to database");
   }
 }
 

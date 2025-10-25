@@ -303,7 +303,7 @@ static void storage_init(const std::string &dsn) {
     conn = std::unique_ptr<pqxx::connection>(new pqxx::connection(dsn));
     if (!conn->is_open()) {
       console->debug("unable to connect to database");
-      exit(-1);
+      throw std::runtime_error("unable to connect to database");
     }
     conn->trace(stderr);
 
@@ -337,7 +337,7 @@ static void storage_init(const std::string &dsn) {
     txn.commit();
   } catch (const std::exception &e) {
     console->error("{}", e.what());
-    exit(-1);
+    throw std::runtime_error("unable to connect to database");
   }
 }
 
