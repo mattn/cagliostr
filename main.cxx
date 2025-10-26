@@ -520,30 +520,30 @@ static auto html = R"(
 </html>
 )";
 
-static auto nip11 = R"({
-  "name": "cagliostr",
-  "description": "nostr relay written in C++",
-  "pubkey": "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc",
-  "contact": "mattn.jp@gmail.com",
-  "supported_nips": [1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40, 42, 45, 50, 70],
-  "software": "https://github.com/mattn/cagliostr",
-  "version": ")" VERSION R"(",
-  "limitation": {
-    "max_message_length": 524288,
-    "max_subscriptions": 20,
-    "max_filters": 10,
-    "max_limit": 500,
-    "max_subid_length": 100,
-    "max_event_tags": 100,
-    "max_content_length": 16384,
-    "min_pow_difficulty": 30,
-    "auth_required": false,
-    "payment_required": false,
-    "restricted_writes": false
-  },
-  "fees": {},
-  "icon": "https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png"
-})"_json;
+static auto nip11 = nlohmann::json{
+    {"name", "cagliostr"},
+    {"description", "Nostr relay written in C++"},
+    {"pubkey", "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc"},
+    {"contact", "mattn.jp@gmail.com"},
+    {"supported_nips", nlohmann::json::array({1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40, 42, 45, 50, 70})},
+    {"software", "https://github.com/mattn/cagliostr"},
+    {"version", VERSION},
+    {"limitation", nlohmann::json{
+        {"max_message_length", 1024*1024},
+        {"max_subscriptions", 20},
+        {"max_filters", 10},
+        {"max_limit", 500},
+        {"max_subid_length", 100},
+        {"max_event_tags", 100},
+        {"max_content_length", 16384},
+        {"min_pow_difficulty", 30},
+        {"auth_required", false},
+        {"payment_required", false},
+        {"restricted_writes", false}
+    }},
+    {"fees", nlohmann::json::object()},
+    {"icon", "https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png"}
+};
 
 static void http_request_callback(ws28::HTTPRequest &req,
                                   ws28::HTTPResponse &resp) {
@@ -749,7 +749,7 @@ static void server(short port) {
   server.SetClientConnectedCallback(connect_callback);
   server.SetClientDisconnectedCallback(disconnect_callback);
   server.SetCheckTCPConnectionCallback(tcpcheck_callback);
-  server.SetMaxMessageSize(1024 * 1024);
+  server.SetMaxMessageSize(nip11["limitation"]["max_message_length"].get<size_t>());
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(port);
@@ -792,8 +792,6 @@ int main(int argc, char *argv[]) {
     std::cerr << program;
     return 1;
   }
-
-  nip11["version"] = VERSION;
 
   spdlog::set_level(
       spdlog::level::from_str(program.get<std::string>("-loglevel")));
