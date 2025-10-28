@@ -12,8 +12,10 @@
 #include <unordered_map>
 
 #ifdef _WIN32
-#include <windows.h>
-#include <bcrypt.h>
+#  include <windows.h>
+#  include <bcrypt.h>
+#else
+#  include <fstream>
 #endif
 
 #include <argparse/argparse.hpp>
