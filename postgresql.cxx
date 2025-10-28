@@ -305,7 +305,11 @@ static void storage_init(const std::string &dsn) {
       console->debug("unable to connect to database");
       throw std::runtime_error("unable to connect to database");
     }
+
     conn->trace(stderr);
+    if (console->level() == spdlog::level::trace) {
+      conn->set_verbosity(pqxx::error_verbosity::verbose);
+    }
 
     pqxx::work txn(*conn);
     txn.exec(R"(
