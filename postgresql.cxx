@@ -107,7 +107,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       } else {
         std::string condition;
         for (const auto &id : filter.ids) {
-          condition += std::to_string(++pno) + ",";
+          condition += "$" + std::to_string(++pno) + ",";
           params.append(id);
         }
         condition.pop_back();
