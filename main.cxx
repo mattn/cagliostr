@@ -7,6 +7,14 @@
 
 #include <iomanip>
 #include <random>
+#include <sstream>
+#include <memory>
+#include <unordered_map>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <bcrypt.h>
+#endif
 
 #include <argparse/argparse.hpp>
 
@@ -558,12 +566,35 @@ static void http_request_callback(ws28::HTTPRequest &req,
 }
 
 static std::string generate_random_hex_16() {
-  std::random_device rd;
-  std::mt19937_64 gen(rd());
-  std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
-  uint64_t random_value = dist(gen);
+  uint8_t buf[8] = {0};
+
+#ifdef _WIN32
+  NTSTATUS st = BCryptGenRandom(NULL, buf, sizeof(buf), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+  if (st != 0) {
+    std::random_device rd;
+    for (size_t i = 0; i < sizeof(buf); ++i) buf[i] = static_cast<uint8_t>(rd() & 0xFF);
+  }
+  else
+#else
+  std::ifstream urandom("/dev/urandom", std::ios::in | std::ios::binary);
+  if (urandom) {
+    urandom.read(reinterpret_cast<char*>(buf), sizeof(buf));
+    if (!urandom) {
+      std::random_device rd;
+      for (size_t i = 0; i < sizeof(buf); ++i) buf[i] = static_cast<uint8_t>(rd() & 0xFF);
+    }
+  }
+  else
+#endif
+  {
+    std::random_device rd;
+    for (size_t i = 0; i < sizeof(buf); ++i) buf[i] = static_cast<uint8_t>(rd() & 0xFF);
+  }
+
+  uint64_t v = 0;
+  for (size_t i = 0; i < sizeof(buf); ++i) v = (v << 8) | buf[i];
   std::ostringstream oss;
-  oss << std::hex << std::setw(16) << std::setfill('0') << random_value;
+  oss << std::hex << std::nouppercase << std::setw(16) << std::setfill('0') << v;
   return oss.str();
 }
 
