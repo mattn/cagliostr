@@ -644,7 +644,6 @@ static void signal_handler(uv_signal_t *req, int /*signum*/) {
     }
     relay_notice(s.client, s.sub, "shutdown...");
     s.client->Close(0);
-    s.client = nullptr;
   }
   uv_stop(req->loop);
 }
