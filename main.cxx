@@ -104,13 +104,18 @@ static inline void relay_closed(ws28::Client *client, const std::string &id,
   relay_send(client, data);
 }
 
+static inline std::string to_lower(std::string s) {
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return s;
+}
+
 static bool is_hex(const std::string &s, size_t len) {
-  const static std::string hex = "0123456789abcdef";
   if (s.size() != len) {
     return false;
   }
   for (const auto &c : s) {
-    if (hex.find(c) == std::string::npos) {
+    if (!std::isxdigit(static_cast<unsigned char>(c))) {
       return false;
     }
   }
@@ -120,16 +125,22 @@ static bool is_hex(const std::string &s, size_t len) {
 static bool make_filter(filter_t &filter, const nlohmann::json &data) {
   if (data.count("ids") > 0) {
     for (const auto &id : data["ids"]) {
-      if (!is_hex(id, 64))
+      if (!id.is_string())
         return false;
-      filter.ids.push_back(id);
+      auto idstr = id.get<std::string>();
+      if (!is_hex(idstr, 64))
+        return false;
+      filter.ids.push_back(to_lower(idstr));
     }
   }
   if (data.count("authors") > 0) {
     for (const auto &author : data["authors"]) {
-      if (!is_hex(author, 64))
+      if (!author.is_string())
         return false;
-      filter.authors.push_back(author);
+      auto authorstr = author.get<std::string>();
+      if (!is_hex(authorstr, 64))
+        return false;
+      filter.authors.push_back(to_lower(authorstr));
     }
   }
   if (data.count("kinds") > 0) {
