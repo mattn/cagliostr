@@ -124,50 +124,94 @@ static bool is_hex(const std::string &s, size_t len) {
 
 static bool make_filter(filter_t &filter, const nlohmann::json &data) {
   if (data.count("ids") > 0) {
+    if (!data["ids"].is_array()) {
+      console->warn("make_filter: ids must be array");
+      return false;
+    }
     for (const auto &id : data["ids"]) {
-      if (!id.is_string())
+      if (!id.is_string()) {
+        console->warn("make_filter: ids elements must be string");
         return false;
+      }
       auto idstr = id.get<std::string>();
-      if (!is_hex(idstr, 64))
+      if (!is_hex(idstr, 64)) {
+        console->warn("make_filter: ids element invalid hex/length: {}", idstr);
         return false;
+      }
       filter.ids.push_back(to_lower(idstr));
     }
   }
   if (data.count("authors") > 0) {
+    if (!data["authors"].is_array()) {
+      console->warn("make_filter: authors must be array");
+      return false;
+    }
     for (const auto &author : data["authors"]) {
-      if (!author.is_string())
+      if (!author.is_string()) {
+        console->warn("make_filter: authors elements must be string");
         return false;
+      }
       auto authorstr = author.get<std::string>();
-      if (!is_hex(authorstr, 64))
+      if (!is_hex(authorstr, 64)) {
+        console->warn("make_filter: authors element invalid hex/length: {}", authorstr);
         return false;
+      }
       filter.authors.push_back(to_lower(authorstr));
     }
   }
   if (data.count("kinds") > 0) {
+    if (!data["kinds"].is_array()) {
+      console->warn("make_filter: kinds must be array");
+      return false;
+    }
     for (const auto &kind : data["kinds"]) {
-      filter.kinds.push_back(kind);
+      if (!kind.is_number_integer()) {
+        console->warn("make_filter: kinds elements must be integer");
+        return false;
+      }
+      filter.kinds.push_back(kind.get<int>());
     }
   }
   for (auto it = data.cbegin(); it != data.cend(); ++it) {
     if (!it.key().empty() && it.key().front() == '#' && it.value().is_array()) {
-      std::vector<std::string> tag = {it.key().c_str() + 1};
+      std::vector<std::string> tag = {it.key().substr(1)};
       for (const auto &v : it.value()) {
-        tag.push_back(v);
+        if (!v.is_string()) {
+          console->warn("make_filter: tag {} elements must be string", it.key());
+          return false;
+        }
+        tag.push_back(v.get<std::string>());
       }
       filter.tags.push_back(tag);
     }
   }
   if (data.count("since") > 0) {
-    filter.since = data["since"];
+    if (!data["since"].is_number_integer()) {
+      console->warn("make_filter: since must be integer");
+      return false;
+    }
+    filter.since = data["since"].get<long long>();
   }
   if (data.count("until") > 0) {
-    filter.until = data["until"];
+    if (!data["until"].is_number_integer()) {
+      console->warn("make_filter: until must be integer");
+      return false;
+    }
+    filter.until = data["until"].get<long long>();
   }
   if (data.count("limit") > 0) {
-    filter.limit = data["limit"];
+    if (!data["limit"].is_number_integer()) {
+      console->warn("make_filter: limit must be integer");
+      return false;
+    }
+    filter.limit = data["limit"].get<int>();
   }
   if (data.count("search") > 0) {
-    filter.search = data["search"];
+    if (!data["search"].is_string()) {
+      console->warn("make_filter: search must be string");
+      return false;
+    }
+    filter.search = data["search"].get<std::string>();
   }
   return true;
 }
