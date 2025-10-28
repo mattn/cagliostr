@@ -88,7 +88,7 @@ target_link_libraries(${t_} INTERFACE pqxx)
 target_link_libraries(${t_} INTERFACE ${LIBSECP256K1_LIBRARIES})
 target_link_libraries(${t_} INTERFACE pq)
 if (WIN32)
-target_link_libraries(${t_} INTERFACE secur32 ws2_32 dbghelp userenv iphlpapi)
+target_link_libraries(${t_} INTERFACE secur32 ws2_32 dbghelp userenv iphlpapi bcrypt)
 endif()
 if(MINGW)
     target_link_libraries(${t_} INTERFACE

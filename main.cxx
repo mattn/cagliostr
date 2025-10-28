@@ -37,6 +37,8 @@ static std::string service_url;
 
 static storage_context_t storage_ctx;
 
+static std::unordered_map<ws28::Client*, std::unique_ptr<client_t>> clients_map;
+
 static const std::string realIP(ws28::Client *client) {
   client_t *ci = static_cast<client_t*>(client->GetUserData());
   if (ci != nullptr)
@@ -602,13 +604,16 @@ static void connect_callback(ws28::Client *client, ws28::HTTPRequest &req) {
   auto challenge = generate_random_hex_16();
   nlohmann::json auth = {"AUTH", challenge};
   relay_send(client, auth);
-  auto *ci = new client_t{
-      .ip = realIP(req),
-      .challenge = challenge,
-      .pubkey = "",
-  };
-  client->SetUserData(ci);
-  console->debug("CONNECTED {}", ci->ip);
+
+  auto up = std::make_unique<client_t>();
+  up->ip = realIP(req);
+  up->challenge = challenge;
+  up->pubkey = "";
+
+  client->SetUserData(up.get());
+  clients_map[client] = std::move(up);
+
+  console->debug("CONNECTED {}", clients_map[client]->ip);
 }
 
 static bool tcpcheck_callback(std::string_view /*ip*/, bool /*secure*/) {
@@ -625,9 +630,13 @@ static void disconnect_callback(ws28::Client *client) {
   assert(client);
 
   console->debug("DISCONNECT {}", realIP(client));
-  client_t *ci = static_cast<client_t*>(client->GetUserData());
-  if (ci != nullptr)
-    delete ci;
+
+  auto itc = clients_map.find(client);
+  if (itc != clients_map.end()) {
+    client->SetUserData(nullptr);
+    clients_map.erase(itc);
+  }
+
   auto it = subscribers.begin();
   while (it != subscribers.end()) {
     if (it->client == client) {
