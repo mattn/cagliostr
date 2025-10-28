@@ -18,13 +18,13 @@
 
 #include <argparse/argparse.hpp>
 
-using subscriber_t = struct {
+using subscriber_t = struct subscriber_t {
   std::string sub;
   ws28::Client *client{};
   std::vector<filter_t> filters;
 };
 
-using client_t = struct {
+using client_t = struct client_t {
   std::string ip;
   std::string challenge;
   std::string pubkey;
