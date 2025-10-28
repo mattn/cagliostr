@@ -47,3 +47,5 @@ kustomize/
 litestream.yaml
 *.sh
 .aider*
+.crush*
+*.sqlite
