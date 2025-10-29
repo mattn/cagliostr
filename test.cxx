@@ -75,16 +75,16 @@ static void test_cagliostr_records() {
 }
 
 static void test_sql_injection_protection() {
-  _ok(escape_percent("x%x") == "x\\%x", "basic percent escape");
-  _ok(escape_percent("abc") == "abc", "no percent remains unchanged");
-  _ok(escape_percent("%abc") == "\\%abc", "leading percent escape");
-  _ok(escape_percent("abc%") == "abc\\%", "trailing percent escape");
-  _ok(escape_percent("x%y%z") == "x\\%y\\%z", "multiple percents escape");
-  _ok(escape_percent("%%") == "\\%\\%", "consecutive percents escape");
-  _ok(escape_percent("") == "", "empty string unchanged");
-  _ok(escape_percent("a_b_c") == "a_b_c", "other characters unchanged");
-  _ok(escape_percent("100%") == "100\\%", "percent in number context");
-  _ok(escape_percent("test%x injection") == "test\\%x injection", "injection-like string escapes percent");
+  _ok(escape_like("x%x") == "x\\%x", "basic percent escape_like");
+  _ok(escape_like("abc") == "abc", "no percent remains unchanged");
+  _ok(escape_like("%abc") == "\\%abc", "leading percent escape_like");
+  _ok(escape_like("abc%") == "abc\\%", "trailing percent escape");
+  _ok(escape_like("x%y%z") == "x\\%y\\%z", "multiple percents escape_like");
+  _ok(escape_like("%%") == "\\%\\%", "consecutive percents escape_like");
+  _ok(escape_like("") == "", "empty string unchanged");
+  _ok(escape_like("a_b_c") == "a_b_c", "other characters unchanged");
+  _ok(escape_like("100%") == "100\\%", "percent in number context");
+  _ok(escape_like("test%x injection") == "test\\%x injection", "injection-like string escape_like percent");
 }
 
 static void test_cagliostr_sign() {

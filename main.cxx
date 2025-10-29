@@ -9,6 +9,7 @@
 #include <random>
 #include <sstream>
 #include <memory>
+#include <iomanip>
 #include <unordered_map>
 
 #ifdef _WIN32

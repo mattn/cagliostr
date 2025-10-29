@@ -174,7 +174,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.append("%" + escape_percent(filter.search) + "%");
+      params.append("%" + escape_like(filter.search) + "%");
       conditions.push_back(R"(content LIKE $)" + std::to_string(++pno) +
                            R"( ESCAPE '\')");
     }
@@ -258,22 +258,22 @@ static int
 delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
                                           const std::vector<std::string> &tag,
                                           std::time_t created_at) {
-  std::string sql =
-      R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags::text LIKE $3 AND created_at < $4)";
-
   nlohmann::json data = tag;
-
-  pqxx::work txn(*conn);
-  pqxx::result r =
-      txn.exec("SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND "
-               "tags::text LIKE $3 AND created_at < $4",
-               {kind, pubkey, "%" + escape_percent(data.dump()) + "%", created_at});
-  data.clear();
-
   std::vector<std::string> ids;
-  for (const auto &row : r) {
-    ids.push_back(row["id"].c_str());
+
+  {
+    pqxx::work txn(*conn);
+    pqxx::result r =
+        txn.exec(R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND "
+                 "tags::text LIKE $3 ESCAPE '\' AND created_at < $4)",
+                 {kind, pubkey, "%" + escape_like(data.dump()) + "%", created_at});
+    txn.commit();
+
+    for (const auto &row : r) {
+      ids.push_back(row["id"].c_str());
+    }
   }
+  data.clear();
 
   if (ids.empty()) {
     return 0;
@@ -287,13 +287,15 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   }
   condition.pop_back();
 
-  pqxx::work txn2(*conn);
-  r = txn.exec(
-      pqxx::prepped{"DELETE FROM event WHERE id in (" + condition + ")"},
-      params);
+  int affected = 0;
+  {
+    pqxx::work txn(*conn);
+    pqxx::result r = txn.exec("DELETE FROM event WHERE id IN (" + condition + ")", params);
+    affected = r.affected_rows();
+    txn.commit();
+  }
 
-  txn.commit();
-  return r.affected_rows();
+  return affected;
 }
 
 static void storage_init(const std::string &dsn) {

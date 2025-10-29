@@ -51,11 +51,11 @@ void storage_context_init_postgresql(storage_context_t &);
 
 bool check_event(const event_t &);
 
-inline std::string escape_percent(const std::string &data) {
+inline std::string escape_like(const std::string &data) {
   std::string result;
   for (const auto c : data) {
-    if (c == '%') result += "\\%";
-    else result += c;
+    if (c == '_' || c == '%' || c == '\\') result.push_back('\\');
+    result.push_back((char)c);
   }
   return result;
 }

@@ -147,7 +147,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
           nlohmann::json data = {first, tag[i]};
           params.push_back(
-              {.t = PARAM_TYPE_STRING, .s = "%" + escape_percent(data.dump()) + "%"});
+              {.t = PARAM_TYPE_STRING, .s = "%" + escape_like(data.dump()) + "%"});
           match.push_back(R"(tags LIKE ? ESCAPE '\')");
         }
       }
@@ -172,7 +172,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     }
     if (!filter.search.empty()) {
       params.push_back(
-          {.t = PARAM_TYPE_STRING, .s = "%" + escape_percent(filter.search) + "%"});
+          {.t = PARAM_TYPE_STRING, .s = "%" + escape_like(filter.search) + "%"});
       conditions.push_back(R"(content LIKE ? ESCAPE '\')");
     }
     if (!conditions.empty()) {
@@ -316,7 +316,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   }
 
   nlohmann::json data = tag;
-  auto s = "%" + escape_percent(data.dump()) + "%";
+  auto s = "%" + escape_like(data.dump()) + "%";
   data.clear();
   sqlite3_bind_int(stmt, 1, kind);
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
@@ -402,7 +402,7 @@ static void storage_init(const std::string &dsn) {
     PRAGMA journal_mode = WAL;
     PRAGMA busy_timeout = 5000;
     PRAGMA synchronous = NORMAL;
-    PRAGMA cache_size = 1000000000;
+    PRAGMA cache_size = -262144;
     PRAGMA foreign_keys = true;
     PRAGMA temp_store = memory;
   )";
