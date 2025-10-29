@@ -153,7 +153,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       }
       if (match.size() == 1) {
         conditions.push_back(match.front());
-      } else {
+      } else if (match.size() > 1) {
         conditions.push_back("(" + join(match, " OR ") + ")");
       }
     }
