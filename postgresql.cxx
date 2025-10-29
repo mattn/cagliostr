@@ -11,7 +11,7 @@ static std::unique_ptr<pqxx::connection> conn;
 #define PARAM_TYPE_NUMBER (0)
 #define PARAM_TYPE_STRING (1)
 
-using param_t = struct {
+using param_t = struct param_t {
   int t{};
   int n{};
   std::string s{};
@@ -346,8 +346,7 @@ static void storage_init(const std::string &dsn) {
 }
 
 static void storage_deinit() {
-  conn->close();
-  delete conn.release();
+  conn.reset();
 }
 
 void storage_context_init_postgresql(storage_context_t &ctx) {

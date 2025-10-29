@@ -106,7 +106,7 @@ static inline void relay_closed(ws28::Client *client, const std::string &msg) {
   assert(client);
   nlohmann::json data = {"CLOSED", msg};
   relay_send(client, data);
-  client->Close(0);
+  client->Close(1000);
 }
 
 static inline void relay_closed(ws28::Client *client, const std::string &id,

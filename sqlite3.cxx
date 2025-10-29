@@ -12,7 +12,7 @@ static sqlite3 *conn = nullptr;
 #define PARAM_TYPE_NUMBER (0)
 #define PARAM_TYPE_STRING (1)
 
-using param_t = struct {
+using param_t = struct param_t {
   int t{};
   int n{};
   std::string s{};
