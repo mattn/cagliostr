@@ -78,11 +78,11 @@ static void test_sql_injection_protection() {
   _ok(escape_like("x%x") == "x\\%x", "basic percent escape_like");
   _ok(escape_like("abc") == "abc", "no percent remains unchanged");
   _ok(escape_like("%abc") == "\\%abc", "leading percent escape_like");
-  _ok(escape_like("abc%") == "abc\\%", "trailing percent escape");
+  _ok(escape_like("abc%") == "abc\\%", "trailing percent escape_like");
   _ok(escape_like("x%y%z") == "x\\%y\\%z", "multiple percents escape_like");
   _ok(escape_like("%%") == "\\%\\%", "consecutive percents escape_like");
   _ok(escape_like("") == "", "empty string unchanged");
-  _ok(escape_like("a_b_c") == "a_b_c", "other characters unchanged");
+  _ok(escape_like("a_b_c") == "a\\_b\\_c", "underscore escape_like");
   _ok(escape_like("100%") == "100\\%", "percent in number context");
   _ok(escape_like("test%x injection") == "test\\%x injection", "injection-like string escape_like percent");
 }
