@@ -44,14 +44,14 @@ static bool insert_record(const event_t &ev) {
   }
   nlohmann::json tags = ev.tags;
   auto s = tags.dump();
-  sqlite3_bind_text(stmt, 1, ev.id.data(), (int)ev.id.size(), nullptr);
-  sqlite3_bind_text(stmt, 2, ev.pubkey.data(), (int)ev.pubkey.size(), nullptr);
+  sqlite3_bind_text(stmt, 1, ev.id.data(), (int)ev.id.size(), SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, ev.pubkey.data(), (int)ev.pubkey.size(), SQLITE_TRANSIENT);
   sqlite3_bind_int(stmt, 3, (int)ev.created_at);
   sqlite3_bind_int(stmt, 4, ev.kind);
-  sqlite3_bind_text(stmt, 5, s.data(), (int)s.size(), nullptr);
+  sqlite3_bind_text(stmt, 5, s.data(), (int)s.size(), SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 6, ev.content.data(), (int)ev.content.size(),
-                    nullptr);
-  sqlite3_bind_text(stmt, 7, ev.sig.data(), (int)ev.sig.size(), nullptr);
+                    SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 7, ev.sig.data(), (int)ev.sig.size(), SQLITE_TRANSIENT);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
@@ -197,7 +197,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         break;
       case PARAM_TYPE_STRING:
         sqlite3_bind_text(stmt, i + 1, params.at(i).s.data(),
-                          (int)params.at(i).s.size(), nullptr);
+                          (int)params.at(i).s.size(), SQLITE_TRANSIENT);
         break;
       }
     }
@@ -262,7 +262,7 @@ static int delete_record_by_id(const std::string &id) {
     console->error("{}", sqlite3_errmsg(conn));
     return -1;
   }
-  sqlite3_bind_text(stmt, 1, id.data(), (int)id.size(), nullptr);
+  sqlite3_bind_text(stmt, 1, id.data(), (int)id.size(), SQLITE_TRANSIENT);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
@@ -286,7 +286,7 @@ static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey,
     return -1;
   }
   sqlite3_bind_int(stmt, 1, kind);
-  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
+  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), SQLITE_TRANSIENT);
   sqlite3_bind_int(stmt, 3, created_at);
 
   ret = sqlite3_step(stmt);
@@ -319,8 +319,8 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   auto s = "%" + escape_like(data.dump()) + "%";
   data.clear();
   sqlite3_bind_int(stmt, 1, kind);
-  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), nullptr);
-  sqlite3_bind_text(stmt, 3, s.data(), (int)s.size(), nullptr);
+  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 3, s.data(), (int)s.size(), SQLITE_TRANSIENT);
   sqlite3_bind_int(stmt, 4, created_at);
 
   std::vector<std::string> ids;
@@ -352,7 +352,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
     return -1;
   }
   for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
-    sqlite3_bind_text(stmt, i + 1, ids[i].data(), (int)ids[i].size(), nullptr);
+    sqlite3_bind_text(stmt, i + 1, ids[i].data(), (int)ids[i].size(), SQLITE_TRANSIENT);
   }
 
   ret = sqlite3_step(stmt);
