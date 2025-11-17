@@ -49,7 +49,7 @@ static auto nip11 = nlohmann::json{
      "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc"},
     {"contact", "mattn.jp@gmail.com"},
     {"supported_nips", nlohmann::json::array({1, 2, 4, 9, 11, 12, 15, 16, 20,
-                                              22, 28, 33, 40, 42, 45, 50, 70})},
+                                              22, 28, 33, 40, 42, 45, 50, 62, 70})},
     {"software", "https://github.com/mattn/cagliostr"},
     {"version", VERSION},
     {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024},
@@ -515,6 +515,55 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
               return;
             }
           }
+        }
+      }
+      nlohmann::json reply = {"OK", ev.id, true, ""};
+      relay_send(client, reply);
+      return;
+    } else if (ev.kind == 62) {
+      // NIP-62: Request to Vanish
+      // First, check if we should delete events for this relay
+      bool should_process = false;
+      for (const auto &tag : ev.tags) {
+        if (tag.size() >= 2 && tag[0] == "relay") {
+          if (tag[1] == "ALL_RELAYS" || tag[1] == service_url) {
+            should_process = true;
+            break;
+          }
+          // Check if the relay URL matches (with or without trailing slash)
+          std::string relay_url = tag[1];
+          std::string service_url_copy = service_url;
+          while (!relay_url.empty() && relay_url.back() == '/') {
+            relay_url.pop_back();
+          }
+          while (!service_url_copy.empty() && service_url_copy.back() == '/') {
+            service_url_copy.pop_back();
+          }
+          if (relay_url == service_url_copy) {
+            should_process = true;
+            break;
+          }
+        }
+      }
+
+      if (should_process) {
+        // Delete all events from the pubkey (except kind 62 itself for propagation)
+        if (storage_ctx.delete_all_events_by_pubkey(ev.pubkey, ev.created_at) < 0) {
+          relay_notice(client, ev.id, "error: failed to vanish events");
+          return;
+        }
+      }
+
+      // Always store kind 62 event for propagation to other relays
+      if (!storage_ctx.insert_record(ev)) {
+        relay_notice(client, ev.id, "error: duplicate event");
+        return;
+      }
+
+      for (const auto &s : subscribers) {
+        if (matched_filters(s.filters, ev)) {
+          nlohmann::json reply = {"EVENT", s.sub, ev};
+          relay_send(s.client, reply);
         }
       }
       nlohmann::json reply = {"OK", ev.id, true, ""};

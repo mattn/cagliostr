@@ -299,6 +299,21 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   return affected;
 }
 
+static int delete_all_events_by_pubkey(const std::string &pubkey,
+                                       std::time_t created_at) {
+  const auto sql =
+      R"(DELETE FROM event WHERE pubkey = $1 AND created_at <= $2 AND kind != 62)";
+  pqxx::work txn(*conn);
+  try {
+    pqxx::result r = txn.exec(sql, pqxx::params{pubkey, created_at});
+    txn.commit();
+    return r.affected_rows();
+  } catch (const std::exception &e) {
+    console->error("{}", e.what());
+    return -1;
+  }
+}
+
 static void storage_init(const std::string &dsn) {
   console->debug("initialize storage");
 
@@ -358,5 +373,6 @@ void storage_context_init_postgresql(storage_context_t &ctx) {
   ctx.delete_record_by_kind_and_pubkey = delete_record_by_kind_and_pubkey;
   ctx.delete_record_by_kind_and_pubkey_and_dtag =
       delete_record_by_kind_and_pubkey_and_dtag;
+  ctx.delete_all_events_by_pubkey = delete_all_events_by_pubkey;
   ctx.send_records = send_records;
 }

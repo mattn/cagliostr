@@ -41,6 +41,7 @@ using storage_context_t = struct storage_context_t {
                                           std::time_t);
   int (*delete_record_by_kind_and_pubkey_and_dtag)(
       int, const std::string &, const std::vector<std::string> &, std::time_t);
+  int (*delete_all_events_by_pubkey)(const std::string &, std::time_t);
   bool (*send_records)(std::function<void(const nlohmann::json &)>,
                        const std::string &, const std::vector<filter_t> &,
                        bool);

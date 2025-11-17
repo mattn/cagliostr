@@ -370,6 +370,31 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   return sqlite3_changes(conn);
 }
 
+static int delete_all_events_by_pubkey(const std::string &pubkey,
+                                       std::time_t created_at) {
+  const auto sql =
+      R"(DELETE FROM event WHERE pubkey = ? AND created_at <= ? AND kind != 62)";
+  sqlite3_stmt *stmt = nullptr;
+  auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
+  if (ret != SQLITE_OK) {
+    console->error("{}", sqlite3_errmsg(conn));
+    return -1;
+  }
+  sqlite3_bind_text(stmt, 1, pubkey.data(), (int)pubkey.size(),
+                    SQLITE_TRANSIENT);
+  sqlite3_bind_int(stmt, 2, created_at);
+
+  ret = sqlite3_step(stmt);
+  if (ret != SQLITE_DONE) {
+    console->error("{}", sqlite3_errmsg(conn));
+    sqlite3_finalize(stmt);
+    return -1;
+  }
+  sqlite3_finalize(stmt);
+
+  return sqlite3_changes(conn);
+}
+
 static void sqlite3_trace_callback(void * /*user_data*/,
                                    const char *statement) {
   assert(statement);
@@ -427,5 +452,6 @@ void storage_context_init_sqlite3(storage_context_t &ctx) {
   ctx.delete_record_by_kind_and_pubkey = delete_record_by_kind_and_pubkey;
   ctx.delete_record_by_kind_and_pubkey_and_dtag =
       delete_record_by_kind_and_pubkey_and_dtag;
+  ctx.delete_all_events_by_pubkey = delete_all_events_by_pubkey;
   ctx.send_records = send_records;
 }
