@@ -1,6 +1,5 @@
 #include "cagliostr.hxx"
 #include <ctime>
-#include <sstream>
 #include <iostream>
 #include <sstream>
 
@@ -45,13 +44,15 @@ static bool insert_record(const event_t &ev) {
   nlohmann::json tags = ev.tags;
   auto s = tags.dump();
   sqlite3_bind_text(stmt, 1, ev.id.data(), (int)ev.id.size(), SQLITE_TRANSIENT);
-  sqlite3_bind_text(stmt, 2, ev.pubkey.data(), (int)ev.pubkey.size(), SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, ev.pubkey.data(), (int)ev.pubkey.size(),
+                    SQLITE_TRANSIENT);
   sqlite3_bind_int(stmt, 3, (int)ev.created_at);
   sqlite3_bind_int(stmt, 4, ev.kind);
   sqlite3_bind_text(stmt, 5, s.data(), (int)s.size(), SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 6, ev.content.data(), (int)ev.content.size(),
                     SQLITE_TRANSIENT);
-  sqlite3_bind_text(stmt, 7, ev.sig.data(), (int)ev.sig.size(), SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 7, ev.sig.data(), (int)ev.sig.size(),
+                    SQLITE_TRANSIENT);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
@@ -146,8 +147,8 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         auto first = tag[0];
         for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
           nlohmann::json data = {first, tag[i]};
-          params.push_back(
-              {.t = PARAM_TYPE_STRING, .s = "%" + escape_like(data.dump()) + "%"});
+          params.push_back({.t = PARAM_TYPE_STRING,
+                            .s = "%" + escape_like(data.dump()) + "%"});
           match.push_back(R"(tags LIKE ? ESCAPE '\')");
         }
       }
@@ -171,8 +172,8 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.push_back(
-          {.t = PARAM_TYPE_STRING, .s = "%" + escape_like(filter.search) + "%"});
+      params.push_back({.t = PARAM_TYPE_STRING,
+                        .s = "%" + escape_like(filter.search) + "%"});
       conditions.push_back(R"(content LIKE ? ESCAPE '\')");
     }
     if (!conditions.empty()) {
@@ -286,7 +287,8 @@ static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey,
     return -1;
   }
   sqlite3_bind_int(stmt, 1, kind);
-  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(),
+                    SQLITE_TRANSIENT);
   sqlite3_bind_int(stmt, 3, created_at);
 
   ret = sqlite3_step(stmt);
@@ -319,7 +321,8 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   auto s = "%" + escape_like(data.dump()) + "%";
   data.clear();
   sqlite3_bind_int(stmt, 1, kind);
-  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(),
+                    SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 3, s.data(), (int)s.size(), SQLITE_TRANSIENT);
   sqlite3_bind_int(stmt, 4, created_at);
 
@@ -352,7 +355,8 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
     return -1;
   }
   for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
-    sqlite3_bind_text(stmt, i + 1, ids[i].data(), (int)ids[i].size(), SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, i + 1, ids[i].data(), (int)ids[i].size(),
+                      SQLITE_TRANSIENT);
   }
 
   ret = sqlite3_step(stmt);

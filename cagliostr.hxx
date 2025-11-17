@@ -54,7 +54,8 @@ bool check_event(const event_t &);
 inline std::string escape_like(const std::string &data) {
   std::string result;
   for (const auto c : data) {
-    if (c == '_' || c == '%' || c == '\\') result.push_back('\\');
+    if (c == '_' || c == '%' || c == '\\')
+      result.push_back('\\');
     result.push_back((char)c);
   }
   return result;

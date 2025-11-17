@@ -6,17 +6,16 @@
 #include <Server.h>
 
 #include <iomanip>
+#include <memory>
 #include <random>
 #include <sstream>
-#include <memory>
-#include <iomanip>
 #include <unordered_map>
 
 #ifdef _WIN32
-#  include <windows.h>
-#  include <bcrypt.h>
+#include <bcrypt.h>
+#include <windows.h>
 #else
-#  include <fstream>
+#include <fstream>
 #endif
 
 #include <argparse/argparse.hpp>
@@ -40,10 +39,36 @@ static std::string service_url;
 
 static storage_context_t storage_ctx;
 
-static std::unordered_map<ws28::Client*, std::unique_ptr<client_t>> clients_map;
+static std::unordered_map<ws28::Client *, std::unique_ptr<client_t>>
+    clients_map;
+
+static auto nip11 = nlohmann::json{
+    {"name", "cagliostr"},
+    {"description", "Nostr relay written in C++"},
+    {"pubkey",
+     "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc"},
+    {"contact", "mattn.jp@gmail.com"},
+    {"supported_nips", nlohmann::json::array({1, 2, 4, 9, 11, 12, 15, 16, 20,
+                                              22, 28, 33, 40, 42, 45, 50, 70})},
+    {"software", "https://github.com/mattn/cagliostr"},
+    {"version", VERSION},
+    {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024},
+                                  {"max_subscriptions", 20},
+                                  {"max_filters", 10},
+                                  {"max_limit", 500},
+                                  {"max_subid_length", 100},
+                                  {"max_event_tags", 100},
+                                  {"max_content_length", 16384},
+                                  {"min_pow_difficulty", 30},
+                                  {"auth_required", false},
+                                  {"payment_required", false},
+                                  {"restricted_writes", false}}},
+    {"fees", nlohmann::json::object()},
+    {"icon",
+     "https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png"}};
 
 static const std::string realIP(ws28::Client *client) {
-  client_t *ci = static_cast<client_t*>(client->GetUserData());
+  client_t *ci = static_cast<client_t *>(client->GetUserData());
   if (ci != nullptr)
     return ci->ip;
   return client->GetIP();
@@ -64,20 +89,20 @@ static const std::string realIP(ws28::HTTPRequest &req) {
 }
 
 static const std::string challenge(ws28::Client *client) {
-  client_t *ci = static_cast<client_t*>(client->GetUserData());
+  client_t *ci = static_cast<client_t *>(client->GetUserData());
   if (ci != nullptr)
     return ci->challenge;
   return "";
 }
 
 static void set_auth_pubkey(ws28::Client *client, std::string pubkey) {
-  client_t *ci = static_cast<client_t*>(client->GetUserData());
+  client_t *ci = static_cast<client_t *>(client->GetUserData());
   if (ci != nullptr)
     ci->pubkey = pubkey;
 }
 
 static bool check_auth_pubkey(ws28::Client *client, std::string pubkey) {
-  client_t *ci = static_cast<client_t*>(client->GetUserData());
+  client_t *ci = static_cast<client_t *>(client->GetUserData());
   if (ci != nullptr)
     return ci->pubkey == pubkey;
   return false;
@@ -118,8 +143,9 @@ static inline void relay_closed(ws28::Client *client, const std::string &id,
 }
 
 static inline std::string to_lower(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
   return s;
 }
 
@@ -147,9 +173,19 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
         return false;
       }
       auto idstr = id.get<std::string>();
-      if (!is_hex(idstr, 64)) {
-        console->warn("make_filter: ids element invalid hex/length: {}", idstr);
+      if (idstr.size() > 64 || idstr.empty()) {
+        console->warn("make_filter: ids element invalid length: {}", idstr);
         return false;
+      }
+      if (idstr.size() == 64 && !is_hex(idstr, 64)) {
+        console->warn("make_filter: ids element invalid hex: {}", idstr);
+        return false;
+      }
+      for (const auto &c : idstr) {
+        if (!std::isxdigit(static_cast<unsigned char>(c))) {
+          console->warn("make_filter: ids element invalid hex: {}", idstr);
+          return false;
+        }
       }
       filter.ids.push_back(to_lower(idstr));
     }
@@ -165,9 +201,22 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
         return false;
       }
       auto authorstr = author.get<std::string>();
-      if (!is_hex(authorstr, 64)) {
-        console->warn("make_filter: authors element invalid hex/length: {}", authorstr);
+      if (authorstr.size() > 64 || authorstr.empty()) {
+        console->warn("make_filter: authors element invalid length: {}",
+                      authorstr);
         return false;
+      }
+      if (authorstr.size() == 64 && !is_hex(authorstr, 64)) {
+        console->warn("make_filter: authors element invalid hex: {}",
+                      authorstr);
+        return false;
+      }
+      for (const auto &c : authorstr) {
+        if (!std::isxdigit(static_cast<unsigned char>(c))) {
+          console->warn("make_filter: authors element invalid hex: {}",
+                        authorstr);
+          return false;
+        }
       }
       filter.authors.push_back(to_lower(authorstr));
     }
@@ -190,7 +239,8 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
       std::vector<std::string> tag = {it.key().substr(1)};
       for (const auto &v : it.value()) {
         if (!v.is_string()) {
-          console->warn("make_filter: tag {} elements must be string", it.key());
+          console->warn("make_filter: tag {} elements must be string",
+                        it.key());
           return false;
         }
         tag.push_back(v.get<std::string>());
@@ -217,7 +267,13 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
       console->warn("make_filter: limit must be integer");
       return false;
     }
-    filter.limit = data["limit"].get<int>();
+    auto limit_val = data["limit"].get<int>();
+    int max_limit = nip11["limitation"]["max_limit"];
+    if (limit_val < 0 || limit_val > max_limit) {
+      console->warn("make_filter: limit out of range: {}", limit_val);
+      return false;
+    }
+    filter.limit = limit_val;
   }
   if (data.count("search") > 0) {
     if (!data["search"].is_string()) {
@@ -232,10 +288,29 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
 static void do_relay_req(ws28::Client *client, const nlohmann::json &data) {
   assert(client);
   std::string sub = data[1];
+
+  // Check subscription limits
+  int sub_count = 0;
+  for (const auto &s : subscribers) {
+    if (s.client == client) {
+      sub_count++;
+    }
+  }
+  int max_subs = nip11["limitation"]["max_subscriptions"];
+  if (sub_count >= max_subs) {
+    relay_notice(client, sub, "error: too many subscriptions");
+    return;
+  }
+
   std::vector<filter_t> filters;
+  int max_filters = nip11["limitation"]["max_filters"];
   for (size_t i = 2; i < data.size(); i++) {
     if (!data[i].is_object()) {
       continue;
+    }
+    if (filters.size() >= static_cast<size_t>(max_filters)) {
+      relay_notice(client, sub, "error: too many filters");
+      return;
     }
     try {
       filter_t filter;
@@ -254,6 +329,17 @@ static void do_relay_req(ws28::Client *client, const nlohmann::json &data) {
     relay_send(client, reply);
     return;
   }
+
+  // Remove existing subscription with same ID
+  auto it = subscribers.begin();
+  while (it != subscribers.end()) {
+    if (it->sub == sub && it->client == client) {
+      it = subscribers.erase(it);
+    } else {
+      it++;
+    }
+  }
+
   subscribers.push_back({.sub = sub, .client = client, .filters = filters});
 
   storage_ctx.send_records(
@@ -391,8 +477,21 @@ static void from_json(const nlohmann::json &j, event_t &e) {
 static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
   try {
     const event_t ev = data[1];
+
+    // Validate event size limits
+    int max_tags = nip11["limitation"]["max_event_tags"];
+    int max_content = nip11["limitation"]["max_content_length"];
+    if (ev.tags.size() > static_cast<size_t>(max_tags)) {
+      relay_notice(client, ev.id, "error: too many tags");
+      return;
+    }
+    if (ev.content.size() > static_cast<size_t>(max_content)) {
+      relay_notice(client, ev.id, "error: content too large");
+      return;
+    }
+
     if (!check_event(ev)) {
-      relay_notice(client, "error: invalid id or signature");
+      relay_notice(client, ev.id, "error: invalid id or signature");
       return;
     }
 
@@ -412,18 +511,24 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
         if (tag.size() >= 2 && tag[0] == "e") {
           for (size_t i = 1; i < tag.size(); i++) {
             if (storage_ctx.delete_record_by_id(tag[i]) < 0) {
+              relay_notice(client, ev.id, "error: failed to delete event");
               return;
             }
           }
         }
       }
+      nlohmann::json reply = {"OK", ev.id, true, ""};
+      relay_send(client, reply);
+      return;
     } else {
       if (20000 <= ev.kind && ev.kind < 30000) {
+        relay_notice(client, ev.id, "error: ephemeral events not stored");
         return;
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
         if (storage_ctx.delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey,
                                                          ev.created_at) < 0) {
+          relay_notice(client, ev.id, "error: failed to replace event");
           return;
         }
       } else if (30000 <= ev.kind && ev.kind < 40000) {
@@ -432,14 +537,15 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
           if (tag.size() >= 2 && tag[0] == "d") {
             if (storage_ctx.delete_record_by_kind_and_pubkey_and_dtag(
                     ev.kind, ev.pubkey, tag, ev.created_at) < 0) {
+              relay_notice(client, ev.id, "error: failed to replace event");
               return;
             }
           }
         }
       }
 
-      if (storage_ctx.insert_record(ev) != 1) {
-        relay_notice(client, "error: duplicate event");
+      if (!storage_ctx.insert_record(ev)) {
+        relay_notice(client, ev.id, "error: duplicate event");
         return;
       }
     }
@@ -523,31 +629,6 @@ static auto html = R"(
 </html>
 )";
 
-static auto nip11 = nlohmann::json{
-    {"name", "cagliostr"},
-    {"description", "Nostr relay written in C++"},
-    {"pubkey", "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc"},
-    {"contact", "mattn.jp@gmail.com"},
-    {"supported_nips", nlohmann::json::array({1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40, 42, 45, 50, 70})},
-    {"software", "https://github.com/mattn/cagliostr"},
-    {"version", VERSION},
-    {"limitation", nlohmann::json{
-        {"max_message_length", 1024*1024},
-        {"max_subscriptions", 20},
-        {"max_filters", 10},
-        {"max_limit", 500},
-        {"max_subid_length", 100},
-        {"max_event_tags", 100},
-        {"max_content_length", 16384},
-        {"min_pow_difficulty", 30},
-        {"auth_required", false},
-        {"payment_required", false},
-        {"restricted_writes", false}
-    }},
-    {"fees", nlohmann::json::object()},
-    {"icon", "https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png"}
-};
-
 static void http_request_callback(ws28::HTTPRequest &req,
                                   ws28::HTTPResponse &resp) {
   console->debug("{} >> {} {}", realIP(req), req.method, req.path);
@@ -574,32 +655,36 @@ static std::string generate_random_hex_16() {
   uint8_t buf[8] = {0};
 
 #ifdef _WIN32
-  NTSTATUS st = BCryptGenRandom(NULL, buf, sizeof(buf), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+  NTSTATUS st =
+      BCryptGenRandom(NULL, buf, sizeof(buf), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
   if (st != 0) {
     std::random_device rd;
-    for (size_t i = 0; i < sizeof(buf); ++i) buf[i] = static_cast<uint8_t>(rd() & 0xFF);
-  }
-  else
+    for (size_t i = 0; i < sizeof(buf); ++i)
+      buf[i] = static_cast<uint8_t>(rd() & 0xFF);
+  } else
 #else
   std::ifstream urandom("/dev/urandom", std::ios::in | std::ios::binary);
   if (urandom) {
-    urandom.read(reinterpret_cast<char*>(buf), sizeof(buf));
+    urandom.read(reinterpret_cast<char *>(buf), sizeof(buf));
     if (!urandom) {
       std::random_device rd;
-      for (size_t i = 0; i < sizeof(buf); ++i) buf[i] = static_cast<uint8_t>(rd() & 0xFF);
+      for (size_t i = 0; i < sizeof(buf); ++i)
+        buf[i] = static_cast<uint8_t>(rd() & 0xFF);
     }
-  }
-  else
+  } else
 #endif
   {
     std::random_device rd;
-    for (size_t i = 0; i < sizeof(buf); ++i) buf[i] = static_cast<uint8_t>(rd() & 0xFF);
+    for (size_t i = 0; i < sizeof(buf); ++i)
+      buf[i] = static_cast<uint8_t>(rd() & 0xFF);
   }
 
   uint64_t v = 0;
-  for (size_t i = 0; i < sizeof(buf); ++i) v = (v << 8) | buf[i];
+  for (size_t i = 0; i < sizeof(buf); ++i)
+    v = (v << 8) | buf[i];
   std::ostringstream oss;
-  oss << std::hex << std::nouppercase << std::setw(16) << std::setfill('0') << v;
+  oss << std::hex << std::nouppercase << std::setw(16) << std::setfill('0')
+      << v;
   return oss.str();
 }
 
@@ -676,9 +761,24 @@ static void data_callback(ws28::Client *client, char *data, size_t len,
 
     std::string method = payload[0];
     if (!check_method(method)) {
-      std::string id = payload[1];
-      relay_notice(client, id, "error: invalid request");
+      if (payload.size() >= 2 && payload[1].is_string()) {
+        std::string id = payload[1];
+        relay_notice(client, id, "error: invalid request");
+      } else {
+        relay_notice(client, "error: invalid request");
+      }
       return;
+    }
+
+    // Validate subscription ID length for REQ/COUNT/CLOSE
+    if ((method == "REQ" || method == "COUNT" || method == "CLOSE") &&
+        payload[1].is_string()) {
+      auto sub_id = payload[1].get<std::string>();
+      int max_subid = nip11["limitation"]["max_subid_length"];
+      if (sub_id.size() > static_cast<size_t>(max_subid)) {
+        relay_notice(client, "error: subscription id too long");
+        return;
+      }
     }
 
     if (method == "REQ") {
@@ -752,7 +852,8 @@ static void server(short port) {
   server.SetClientConnectedCallback(connect_callback);
   server.SetClientDisconnectedCallback(disconnect_callback);
   server.SetCheckTCPConnectionCallback(tcpcheck_callback);
-  server.SetMaxMessageSize(nip11["limitation"]["max_message_length"].get<size_t>());
+  server.SetMaxMessageSize(
+      nip11["limitation"]["max_message_length"].get<size_t>());
   server.SetCheckConnectionCallback(check_callback);
   server.SetHTTPCallback(http_request_callback);
   server.Listen(port);

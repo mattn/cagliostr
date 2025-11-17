@@ -1,9 +1,9 @@
 #include "cagliostr.hxx"
 #include <iostream>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <pqxx/pqxx>
 #include <string>
-#include <memory>
 #include <vector>
 
 static std::unique_ptr<pqxx::connection> conn;
@@ -263,10 +263,10 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
 
   {
     pqxx::work txn(*conn);
-    pqxx::result r =
-        txn.exec(R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND "
+    pqxx::result r = txn.exec(
+        R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND "
                  "tags::text LIKE $3 ESCAPE '\' AND created_at < $4)",
-                 {kind, pubkey, "%" + escape_like(data.dump()) + "%", created_at});
+        {kind, pubkey, "%" + escape_like(data.dump()) + "%", created_at});
     txn.commit();
 
     for (const auto &row : r) {
@@ -290,7 +290,8 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   int affected = 0;
   {
     pqxx::work txn(*conn);
-    pqxx::result r = txn.exec("DELETE FROM event WHERE id IN (" + condition + ")", params);
+    pqxx::result r =
+        txn.exec("DELETE FROM event WHERE id IN (" + condition + ")", params);
     affected = r.affected_rows();
     txn.commit();
   }
@@ -347,9 +348,7 @@ static void storage_init(const std::string &dsn) {
   }
 }
 
-static void storage_deinit() {
-  conn.reset();
-}
+static void storage_deinit() { conn.reset(); }
 
 void storage_context_init_postgresql(storage_context_t &ctx) {
   ctx.init = storage_init;
