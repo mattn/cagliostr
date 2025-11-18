@@ -269,9 +269,13 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
     }
     auto limit_val = data["limit"].get<int>();
     int max_limit = nip11["limitation"]["max_limit"];
-    if (limit_val < 0 || limit_val > max_limit) {
+    if (limit_val < 0) {
       console->warn("make_filter: limit out of range: {}", limit_val);
       return false;
+    }
+    if (limit_val > max_limit) {
+      console->warn("make_filter: limit out of range: {}", limit_val);
+      limit_val = max_limit;
     }
     filter.limit = limit_val;
   }
