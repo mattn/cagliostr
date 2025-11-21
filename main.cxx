@@ -396,6 +396,8 @@ static void do_relay_close(ws28::Client *client, const nlohmann::json &data) {
       it++;
     }
   }
+  nlohmann::json reply = {"CLOSED", sub, ""};
+  relay_send(client, reply);
 }
 
 static bool matched_filters(const std::vector<filter_t> &filters,
