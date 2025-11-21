@@ -264,8 +264,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   {
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
-        R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND "
-                 "tags::text LIKE $3 ESCAPE '\' AND created_at < $4)",
+        R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags::text LIKE $3 ESCAPE '\' AND created_at < $4)",
         {kind, pubkey, "%" + escape_like(data.dump()) + "%", created_at});
     txn.commit();
 
