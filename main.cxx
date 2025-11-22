@@ -52,7 +52,7 @@ static auto nip11 = nlohmann::json{
                                               22, 28, 33, 40, 42, 45, 50, 62, 70})},
     {"software", "https://github.com/mattn/cagliostr"},
     {"version", VERSION},
-    {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024},
+    {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024 * 5},
                                   {"max_subscriptions", 20},
                                   {"max_filters", 10},
                                   {"max_limit", 500},
