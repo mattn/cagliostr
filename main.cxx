@@ -102,7 +102,7 @@ globalThis.addEventListener('DOMContentLoaded', () => {
 <body>
 <div id="content">
 <h1>Cagliostr the Nostr relay server</h1>
-<p id="relay-name">nostr-relay</p>
+<p id="relay-name"></p>
 <p><img src="https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png" /></p>
 <p><a href="https://github.com/mattn/cagliostr">https://github.com/mattn/cagliostr</a></p>
 <p><span id="makibishi"></span></p>
@@ -849,6 +849,11 @@ static void ws_close_handler(WebSocket *ws, int /*code*/,
 
 static void http_get_handler(uWS::HttpResponse<false> *res,
                              uWS::HttpRequest *req) {
+  // CORS headers
+  res->writeHeader("Access-Control-Allow-Origin", "*");
+  res->writeHeader("Access-Control-Allow-Headers", "*");
+  res->writeHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
   // Check Accept header
   std::string accept;
   for (auto header : *req) {
@@ -879,6 +884,16 @@ static void ws_drain_handler(WebSocket * /*ws*/) {
   // Check getBufferedAmount here if needed
 }
 
+static void http_options_handler(uWS::HttpResponse<false> *res,
+                                 uWS::HttpRequest * /*req*/) {
+  // CORS preflight
+  res->writeHeader("Access-Control-Allow-Origin", "*");
+  res->writeHeader("Access-Control-Allow-Headers", "*");
+  res->writeHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res->writeStatus("204 No Content");
+  res->end();
+}
+
 static void server(short port) {
   uWS::App app;
   global_app = &app;
@@ -904,6 +919,7 @@ static void server(short port) {
           .pong = ws_pong_handler,
           .close = ws_close_handler})
       .get("/", http_get_handler)
+      .options("/*", http_options_handler)
       .listen(port,
               [port](auto *listen_socket) {
                 if (listen_socket) {
