@@ -15,7 +15,7 @@ COPY . /usr/src/app
 RUN git submodule update --init --recursive --recommend-shallow --depth 1
 
 # patch ws28 library to fix issues
-RUN cd deps/matheus28-ws28 && patch -p1 < ../../ws28-fix.patch && cd ../..-
+RUN patch -p1 -d deps/matheus28-ws28 -i ../../ws28-fix.patch
 
 RUN mkdir build && cd build && \
     cmake -DCMAKE_BUILD_TYPE=Release .. && \
