@@ -49,8 +49,8 @@ static auto nip11 = nlohmann::json{
      "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc"},
     {"contact", "mattn.jp@gmail.com"},
     {"supported_nips",
-     nlohmann::json::array(
-         {1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40, 42, 45, 50, 62, 70})},
+     nlohmann::json::array({1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 26, 28, 33, 40,
+                            42, 45, 50, 62, 70})},
     {"software", "https://github.com/mattn/cagliostr"},
     {"version", VERSION},
     {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024 * 5},
