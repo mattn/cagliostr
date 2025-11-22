@@ -14,18 +14,6 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g3 -Og -pg")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -s -DNDEBUG -march=native")
 
 #--------------------------------------------------
-# libuv
-set(LIBUV_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build/libuv.a)
-add_custom_target(libuv DEPENDS ${LIBUV_LIBRARIES})
-add_custom_command(
-    OUTPUT ${LIBUV_LIBRARIES}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv
-    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    COMMAND ${CMAKE_COMMAND} --build build -t uv_a
-)
-link_directories(${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build)
-
-#--------------------------------------------------
 # libsecp256k1
 set(LIBSECP256K1_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/lib/libsecp256k1.a)
 add_custom_target(libsecp256k1 DEPENDS ${LIBSECP256K1_LIBRARIES})
@@ -46,14 +34,21 @@ set_target_properties(pqxx PROPERTIES BUILD_SHARED_LIBS OFF)
 add_compile_definitions(PQXX_STATIC)
 
 #--------------------------------------------------
+# uSockets
+set(USOCKETS_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/deps/unetworking-usockets/uSockets.a)
+add_custom_target(usockets DEPENDS ${USOCKETS_LIBRARIES})
+add_custom_command(
+    OUTPUT ${USOCKETS_LIBRARIES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/unetworking-usockets
+    COMMAND $(MAKE) default
+)
+
+#--------------------------------------------------
 # cagliostr-core
 set_property(GLOBAL APPEND PROPERTY ADDITIONAL_CLEAN_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/CMakeFiles"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/Makefile"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/cmake_install.cmake"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build/CMakeFiles"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build/Makefile"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deps/libuv-libuv/build/cmake_install.cmake"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/CMakeFiles"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/Makefile"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/build/cmake_install.cmake"
@@ -69,24 +64,25 @@ set (t_ cagliostr-core)
 include_directories(
     ${t_}
     ${PROJECT_SOURCE_DIR}/deps/dcdpr-libbech32/include
-    ${PROJECT_SOURCE_DIR}/deps/matheus28-ws28/src
     ${PROJECT_SOURCE_DIR}/deps/nlohmann-json/include
-    ${PROJECT_SOURCE_DIR}/deps/libuv-libuv/include
     ${PROJECT_SOURCE_DIR}/deps/bitcoin-core-libsecp256k1/include
     ${PROJECT_SOURCE_DIR}/deps/gabime-spdlog/include
     ${PROJECT_SOURCE_DIR}/deps/p-ranav-argparse/include
+    ${PROJECT_SOURCE_DIR}/deps/unetworking-uwebsockets/src
+    ${PROJECT_SOURCE_DIR}/deps/unetworking-usockets/src
 )
 add_library (${t_} INTERFACE)
-add_dependencies(${t_} libuv)
+add_dependencies(${t_} usockets)
 add_dependencies(${t_} libsecp256k1)
 add_dependencies(${t_} libspdlog)
 target_link_libraries(${t_} INTERFACE crypto)
 target_link_libraries(${t_} INTERFACE ssl)
 target_link_libraries(${t_} INTERFACE sqlite3)
-target_link_libraries(${t_} INTERFACE ${LIBUV_LIBRARIES})
+target_link_libraries(${t_} INTERFACE ${USOCKETS_LIBRARIES})
 target_link_libraries(${t_} INTERFACE pqxx)
 target_link_libraries(${t_} INTERFACE ${LIBSECP256K1_LIBRARIES})
 target_link_libraries(${t_} INTERFACE pq)
+target_link_libraries(${t_} INTERFACE z)
 if (WIN32)
 target_link_libraries(${t_} INTERFACE secur32 ws2_32 dbghelp userenv iphlpapi bcrypt)
 endif()
@@ -103,7 +99,7 @@ endif()
 #--------------------------------------------------
 # cagliostr
 set (t_ cagliostr)
-add_executable(${t_} main.cxx sqlite3.cxx postgresql.cxx sign.cxx deps/matheus28-ws28/src/Server.cpp deps/matheus28-ws28/src/Client.cpp)
+add_executable(${t_} main.cxx sqlite3.cxx postgresql.cxx sign.cxx)
 target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 #--------------------------------------------------
