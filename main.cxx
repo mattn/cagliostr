@@ -733,148 +733,151 @@ static void signal_handler(int /*signum*/) {
   }
 }
 
+static void ws_open_handler(WebSocket *ws) {
+  auto *data = ws->getUserData();
+  data->ip = std::string(ws->getRemoteAddressAsText());
+  data->challenge = generate_random_hex_16();
+  data->pubkey = "";
+
+  nlohmann::json auth = {"AUTH", data->challenge};
+  relay_send(ws, auth);
+
+  console->debug("CONNECTED {}", data->ip);
+}
+
+static void ws_message_handler(WebSocket *ws, std::string_view message,
+                               uWS::OpCode opcode) {
+  if (opcode != uWS::OpCode::TEXT) {
+    return;
+  }
+
+  std::string s(message);
+  console->debug("{} >> {}", realIP(ws), s);
+
+  try {
+    const auto payload = nlohmann::json::parse(s);
+
+    if (!payload.is_array() || payload.size() < 2 || !payload[0].is_string()) {
+      relay_notice(ws, "error: invalid request");
+      return;
+    }
+
+    std::string method = payload[0];
+    if (method != "EVENT" && method != "REQ" && method != "COUNT" &&
+        method != "CLOSE" && method != "AUTH") {
+      if (payload.size() >= 2 && payload[1].is_string()) {
+        std::string id = payload[1];
+        relay_notice(ws, id, "error: invalid request");
+      } else {
+        relay_notice(ws, "error: invalid request");
+      }
+      return;
+    }
+
+    // Validate subscription ID length
+    if ((method == "REQ" || method == "COUNT" || method == "CLOSE") &&
+        payload[1].is_string()) {
+      auto sub_id = payload[1].get<std::string>();
+      int max_subid = nip11["limitation"]["max_subid_length"];
+      if (sub_id.size() > static_cast<size_t>(max_subid)) {
+        relay_notice(ws, "error: subscription id too long");
+        return;
+      }
+    }
+
+    if (method == "REQ") {
+      if (payload.size() < 3) {
+        relay_notice(ws, payload[1], "error: invalid request");
+        return;
+      }
+      do_relay_req(ws, payload);
+    } else if (method == "COUNT") {
+      if (payload.size() < 3) {
+        relay_notice(ws, payload[1], "error: invalid request");
+        return;
+      }
+      do_relay_count(ws, payload);
+    } else if (method == "CLOSE") {
+      do_relay_close(ws, payload);
+    } else if (method == "EVENT") {
+      do_relay_event(ws, payload);
+    } else if (method == "AUTH") {
+      do_relay_auth(ws, payload);
+    } else {
+      relay_notice(ws, payload[1], "error: invalid request");
+    }
+  } catch (std::exception &e) {
+    console->warn("!! {}", e.what());
+    relay_notice(ws, std::string("error: ") + e.what());
+  }
+
+#if defined(__GLIBC__) && !defined(_WIN32)
+  malloc_trim(0);
+#endif
+}
+
+static void ws_close_handler(WebSocket *ws, int /*code*/,
+                             std::string_view /*message*/) {
+  console->debug("DISCONNECT {}", realIP(ws));
+
+  std::lock_guard<std::mutex> lock(subscribers_mutex);
+  auto it = subscribers.begin();
+  while (it != subscribers.end()) {
+    if (it->ws == ws) {
+      it = subscribers.erase(it);
+    } else {
+      it++;
+    }
+  }
+}
+
+static void http_get_handler(uWS::HttpResponse<false> *res,
+                             uWS::HttpRequest *req) {
+  // Check Accept header
+  std::string accept;
+  for (auto header : *req) {
+    if (header.first == "accept") {
+      accept = std::string(header.second);
+      break;
+    }
+  }
+
+  if (accept.find("application/nostr+json") != std::string::npos) {
+    res->writeHeader("Content-Type", "application/nostr+json");
+    res->end(nip11.dump());
+  } else {
+    res->writeHeader("Content-Type", "text/html; charset=UTF-8");
+    res->end(html);
+  }
+}
+
 static void server(short port) {
   uWS::App app;
   global_app = &app;
 
   app.ws<PerSocketData>(
-         "/*",
-         {/* Settings */
-          .compression = uWS::DISABLED,
-          .maxPayloadLength = static_cast<unsigned int>(
-              nip11["limitation"]["max_message_length"].get<size_t>()),
-          .idleTimeout = 120,
-          .maxBackpressure = 1024 * 1024,
-          .closeOnBackpressureLimit = false,
-          .resetIdleTimeoutOnSend = true,
-          .sendPingsAutomatically = true,
+         "/*", {/* Settings */
+                .compression = uWS::DISABLED,
+                .maxPayloadLength = static_cast<unsigned int>(
+                    nip11["limitation"]["max_message_length"].get<size_t>()),
+                .idleTimeout = 120,
+                .maxBackpressure = 1024 * 1024,
+                .closeOnBackpressureLimit = false,
+                .resetIdleTimeoutOnSend = true,
+                .sendPingsAutomatically = true,
 
-          /* Handlers */
-          .upgrade = nullptr,
-          .open =
-              [](WebSocket *ws) {
-                auto *data = ws->getUserData();
-                data->ip = std::string(ws->getRemoteAddressAsText());
-                data->challenge = generate_random_hex_16();
-                data->pubkey = "";
-
-                nlohmann::json auth = {"AUTH", data->challenge};
-                relay_send(ws, auth);
-
-                console->debug("CONNECTED {}", data->ip);
-              },
-          .message =
-              [](WebSocket *ws, std::string_view message, uWS::OpCode opcode) {
-                if (opcode != uWS::OpCode::TEXT) {
-                  return;
-                }
-
-                std::string s(message);
-                console->debug("{} >> {}", realIP(ws), s);
-
-                try {
-                  const auto payload = nlohmann::json::parse(s);
-
-                  if (!payload.is_array() || payload.size() < 2 ||
-                      !payload[0].is_string()) {
-                    relay_notice(ws, "error: invalid request");
-                    return;
-                  }
-
-                  std::string method = payload[0];
-                  if (method != "EVENT" && method != "REQ" &&
-                      method != "COUNT" && method != "CLOSE" &&
-                      method != "AUTH") {
-                    if (payload.size() >= 2 && payload[1].is_string()) {
-                      std::string id = payload[1];
-                      relay_notice(ws, id, "error: invalid request");
-                    } else {
-                      relay_notice(ws, "error: invalid request");
-                    }
-                    return;
-                  }
-
-                  // Validate subscription ID length
-                  if ((method == "REQ" || method == "COUNT" ||
-                       method == "CLOSE") &&
-                      payload[1].is_string()) {
-                    auto sub_id = payload[1].get<std::string>();
-                    int max_subid = nip11["limitation"]["max_subid_length"];
-                    if (sub_id.size() > static_cast<size_t>(max_subid)) {
-                      relay_notice(ws, "error: subscription id too long");
-                      return;
-                    }
-                  }
-
-                  if (method == "REQ") {
-                    if (payload.size() < 3) {
-                      relay_notice(ws, payload[1], "error: invalid request");
-                      return;
-                    }
-                    do_relay_req(ws, payload);
-                  } else if (method == "COUNT") {
-                    if (payload.size() < 3) {
-                      relay_notice(ws, payload[1], "error: invalid request");
-                      return;
-                    }
-                    do_relay_count(ws, payload);
-                  } else if (method == "CLOSE") {
-                    do_relay_close(ws, payload);
-                  } else if (method == "EVENT") {
-                    do_relay_event(ws, payload);
-                  } else if (method == "AUTH") {
-                    do_relay_auth(ws, payload);
-                  } else {
-                    relay_notice(ws, payload[1], "error: invalid request");
-                  }
-                } catch (std::exception &e) {
-                  console->warn("!! {}", e.what());
-                  relay_notice(ws, std::string("error: ") + e.what());
-                }
-
-#if defined(__GLIBC__) && !defined(_WIN32)
-                malloc_trim(0);
-#endif
-              },
-          .drain =
-              [](WebSocket * /*ws*/) {
-                /* Check getBufferedAmount here */
-              },
-          .ping = [](WebSocket * /*ws*/, std::string_view) {},
-          .pong = [](WebSocket * /*ws*/, std::string_view) {},
-          .close =
-              [](WebSocket *ws, int /*code*/, std::string_view /*message*/) {
-                console->debug("DISCONNECT {}", realIP(ws));
-
-                std::lock_guard<std::mutex> lock(subscribers_mutex);
-                auto it = subscribers.begin();
-                while (it != subscribers.end()) {
-                  if (it->ws == ws) {
-                    it = subscribers.erase(it);
-                  } else {
-                    it++;
-                  }
-                }
-              }})
-      .get("/",
-           [](auto *res, auto *req) {
-             // Check Accept header
-             std::string accept;
-             for (auto header : *req) {
-               if (header.first == "accept") {
-                 accept = std::string(header.second);
-                 break;
-               }
-             }
-
-             if (accept.find("application/nostr+json") != std::string::npos) {
-               res->writeHeader("Content-Type", "application/nostr+json");
-               res->end(nip11.dump());
-             } else {
-               res->writeHeader("Content-Type", "text/html; charset=UTF-8");
-               res->end(html);
-             }
-           })
+                /* Handlers */
+                .upgrade = nullptr,
+                .open = ws_open_handler,
+                .message = ws_message_handler,
+                .drain =
+                    [](WebSocket * /*ws*/) {
+                      /* Check getBufferedAmount here */
+                    },
+                .ping = [](WebSocket * /*ws*/, std::string_view) {},
+                .pong = [](WebSocket * /*ws*/, std::string_view) {},
+                .close = ws_close_handler})
+      .get("/", http_get_handler)
       .listen(port,
               [port](auto *listen_socket) {
                 if (listen_socket) {
