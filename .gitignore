@@ -49,4 +49,3 @@ litestream.yaml
 .aider*
 .crush*
 *.sqlite
-deps/matheus28-ws28/.patched
