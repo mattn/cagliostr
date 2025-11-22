@@ -71,6 +71,29 @@ static auto nip11 = nlohmann::json{
     {"icon",
      "https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png"}};
 
+static auto html = R"(<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>Cagliostr</title>
+<style>
+#content {
+  margin: 50vh auto 0;
+  transform: translateY(-50%);
+  padding: 15px 30px;
+  text-align: center;
+  font-size: 2em;
+}
+</style>
+</head>
+<body>
+<div id="content">
+<p>Cagliostr the Nostr relay server</p>
+<p><img src="https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png" /></p>
+</div>
+</body>
+</html>)";
+
 static const std::string realIP(WebSocket *ws) {
   auto *data = ws->getUserData();
   if (data && !data->ip.empty()) {
@@ -647,29 +670,6 @@ static void do_relay_auth(WebSocket *ws, const nlohmann::json &data) {
   }
 }
 
-static auto html = R"(<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"/>
-<title>Cagliostr</title>
-<style>
-#content {
-  margin: 50vh auto 0;
-  transform: translateY(-50%);
-  padding: 15px 30px;
-  text-align: center;
-  font-size: 2em;
-}
-</style>
-</head>
-<body>
-<div id="content">
-<p>Cagliostr the Nostr relay server</p>
-<p><img src="https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png" /></p>
-</div>
-</body>
-</html>)";
-
 static std::string generate_random_hex_16() {
   uint8_t buf[8] = {0};
 
@@ -851,32 +851,42 @@ static void http_get_handler(uWS::HttpResponse<false> *res,
   }
 }
 
+static void ws_ping_handler(WebSocket * /*ws*/, std::string_view /*message*/) {
+  // Ping received - uWebSockets handles pong automatically
+}
+
+static void ws_pong_handler(WebSocket * /*ws*/, std::string_view /*message*/) {
+  // Pong received - connection is alive
+}
+
+static void ws_drain_handler(WebSocket * /*ws*/) {
+  // Check getBufferedAmount here if needed
+}
+
 static void server(short port) {
   uWS::App app;
   global_app = &app;
 
   app.ws<PerSocketData>(
-         "/*", {/* Settings */
-                .compression = uWS::DISABLED,
-                .maxPayloadLength = static_cast<unsigned int>(
-                    nip11["limitation"]["max_message_length"].get<size_t>()),
-                .idleTimeout = 120,
-                .maxBackpressure = 1024 * 1024,
-                .closeOnBackpressureLimit = false,
-                .resetIdleTimeoutOnSend = true,
-                .sendPingsAutomatically = true,
+         "/*",
+         {/* Settings */
+          .compression = uWS::DISABLED,
+          .maxPayloadLength = static_cast<unsigned int>(
+              nip11["limitation"]["max_message_length"].get<size_t>()),
+          .idleTimeout = 120,
+          .maxBackpressure = 1024 * 1024,
+          .closeOnBackpressureLimit = false,
+          .resetIdleTimeoutOnSend = true,
+          .sendPingsAutomatically = true,
 
-                /* Handlers */
-                .upgrade = nullptr,
-                .open = ws_open_handler,
-                .message = ws_message_handler,
-                .drain =
-                    [](WebSocket * /*ws*/) {
-                      /* Check getBufferedAmount here */
-                    },
-                .ping = [](WebSocket * /*ws*/, std::string_view) {},
-                .pong = [](WebSocket * /*ws*/, std::string_view) {},
-                .close = ws_close_handler})
+          /* Handlers */
+          .upgrade = nullptr,
+          .open = ws_open_handler,
+          .message = ws_message_handler,
+          .drain = ws_drain_handler,
+          .ping = ws_ping_handler,
+          .pong = ws_pong_handler,
+          .close = ws_close_handler})
       .get("/", http_get_handler)
       .listen(port,
               [port](auto *listen_socket) {
