@@ -263,7 +263,7 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
       return false;
     }
     if (limit_val > max_limit) {
-      console->warn("make_filter: limit out of range: {}", limit_val);
+      console->debug("make_filter: limit out of range: {}", limit_val);
       limit_val = max_limit;
     }
     filter.limit = limit_val;
