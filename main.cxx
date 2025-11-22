@@ -48,8 +48,9 @@ static auto nip11 = nlohmann::json{
     {"pubkey",
      "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc"},
     {"contact", "mattn.jp@gmail.com"},
-    {"supported_nips", nlohmann::json::array({1, 2, 4, 9, 11, 12, 15, 16, 20,
-                                              22, 28, 33, 40, 42, 45, 50, 62, 70})},
+    {"supported_nips",
+     nlohmann::json::array(
+         {1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 28, 33, 40, 42, 45, 50, 62, 70})},
     {"software", "https://github.com/mattn/cagliostr"},
     {"version", VERSION},
     {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024 * 5},
@@ -553,8 +554,10 @@ static void do_relay_event(ws28::Client *client, const nlohmann::json &data) {
       }
 
       if (should_process) {
-        // Delete all events from the pubkey (except kind 62 itself for propagation)
-        if (storage_ctx.delete_all_events_by_pubkey(ev.pubkey, ev.created_at) < 0) {
+        // Delete all events from the pubkey (except kind 62 itself for
+        // propagation)
+        if (storage_ctx.delete_all_events_by_pubkey(ev.pubkey, ev.created_at) <
+            0) {
           relay_notice(client, ev.id, "error: failed to vanish events");
           return;
         }
