@@ -768,7 +768,7 @@ static void ws_message_handler(WebSocket *ws, std::string_view message,
   }
 
   std::string s(message);
-  console->debug("{} >> {}", realIP(ws), s);
+  console->info("{} >> {}", realIP(ws), s);
 
   try {
     const auto payload = nlohmann::json::parse(s);
