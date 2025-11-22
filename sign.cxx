@@ -133,7 +133,6 @@ bool check_event(const event_t &ev) {
       if (!check_delegation(ev, delegator_pubkey, conditions, delegation_sig)) {
         return false;
       }
-      break;
     }
   }
 

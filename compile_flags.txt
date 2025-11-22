@@ -1,14 +1,14 @@
 -std=c++20
 -I
-deps/matheus28-ws28/src
+deps/unetworking-uwebsockets/src
+-I
+deps/unetworking-usockets/src
 -I
 deps/dcdpr-libbech32/include
 -I
 deps/nlohmann-json/include
 -I
 deps/bitcoin-core-libsecp256k1/include
--I
-deps/libuv-libuv/include
 -I
 deps/gabime-spdlog/include
 -I

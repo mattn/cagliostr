@@ -4,12 +4,6 @@
 [submodule "deps/nlohmann-json"]
 	path = deps/nlohmann-json
 	url = https://github.com/nlohmann/json
-[submodule "deps/matheus28-ws28"]
-	path = deps/matheus28-ws28
-	url = https://github.com/Matheus28/ws28
-[submodule "deps/libuv-libuv"]
-	path = deps/libuv-libuv
-	url = https://github.com/libuv/libuv
 [submodule "deps/bitcoin-core-libsecp256k1"]
 	path = deps/bitcoin-core-libsecp256k1
 	url = https://github.com/bitcoin-core/secp256k1
@@ -22,9 +16,12 @@
 [submodule "deps/h2o-picotest"]
 	path = deps/h2o-picotest
 	url = https://github.com/h2o/picotest
-[submodule "deps/tv-libpqxx"]
-	path = deps/tv-libpqxx
-	url = https://github.com/jtv/libpqxx
 [submodule "deps/jtv-libpqxx"]
 	path = deps/jtv-libpqxx
 	url = https://github.com/jtv/libpqxx
+[submodule "deps/unetworking-uwebsockets"]
+	path = deps/unetworking-uwebsockets
+	url = https://github.com/uNetworking/uWebSockets.git
+[submodule "deps/unetworking-usockets"]
+	path = deps/unetworking-usockets
+	url = https://github.com/uNetworking/uSockets.git
