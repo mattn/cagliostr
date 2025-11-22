@@ -82,7 +82,6 @@ static auto html = R"(<!DOCTYPE html>
   transform: translateY(-50%);
   padding: 15px 30px;
   text-align: center;
-  font-size: 2em;
 }
 </style>
 <script>
@@ -102,7 +101,8 @@ globalThis.addEventListener('DOMContentLoaded', () => {
 </head>
 <body>
 <div id="content">
-<p>Cagliostr the Nostr relay server</p>
+<h1>Cagliostr the Nostr relay server</h1>
+<p id="relay-name">nostr-relay</p>
 <p><img src="https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png" /></p>
 <p><a href="https://github.com/mattn/cagliostr">https://github.com/mattn/cagliostr</a></p>
 <p><span id="makibishi"></span></p>
