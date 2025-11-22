@@ -9,7 +9,8 @@ RUN apk add --no-cache \
     sqlite-dev \
     openssl-dev \
     postgresql-dev \
-    linux-headers
+    linux-headers \
+    zlib-dev
 WORKDIR /usr/src/app
 COPY . /usr/src/app
 RUN git submodule update --init --recursive --recommend-shallow --depth 1
