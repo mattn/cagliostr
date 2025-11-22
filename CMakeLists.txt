@@ -5,39 +5,6 @@ include(CheckLibraryExists)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-#--------------------------------------------------
-# Apply ws28 patch (temporary until upstream merges the fix)
-set(WS28_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/ws28-fix.patch)
-set(WS28_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/matheus28-ws28)
-set(WS28_PATCHED ${WS28_DIR}/.patched)
-
-if(EXISTS ${WS28_PATCH} AND NOT EXISTS ${WS28_PATCHED})
-    message(STATUS "Applying ws28 patch...")
-    execute_process(
-        COMMAND git apply --check ${WS28_PATCH}
-        WORKING_DIRECTORY ${WS28_DIR}
-        RESULT_VARIABLE PATCH_CHECK_RESULT
-        OUTPUT_QUIET
-        ERROR_QUIET
-    )
-    if(PATCH_CHECK_RESULT EQUAL 0)
-        execute_process(
-            COMMAND git apply ${WS28_PATCH}
-            WORKING_DIRECTORY ${WS28_DIR}
-            RESULT_VARIABLE PATCH_RESULT
-        )
-        if(PATCH_RESULT EQUAL 0)
-            file(WRITE ${WS28_PATCHED} "patched")
-            message(STATUS "ws28 patch applied successfully")
-        else()
-            message(WARNING "Failed to apply ws28 patch")
-        endif()
-    else()
-        message(STATUS "ws28 patch already applied or not applicable")
-        file(WRITE ${WS28_PATCHED} "already_applied")
-    endif()
-endif()
-
 #set(CMAKE_CXX_STANDARD 20)
 #set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "-std=c++20 -Wall -Wextra -pedantic")
