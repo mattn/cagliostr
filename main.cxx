@@ -421,8 +421,6 @@ static void do_relay_close(WebSocket *ws, const nlohmann::json &data) {
       it++;
     }
   }
-  nlohmann::json reply = {"CLOSED", sub, ""};
-  relay_send(ws, reply);
 }
 
 static bool matched_filters(const std::vector<filter_t> &filters,
@@ -887,10 +885,10 @@ static void ws_drain_handler(WebSocket * /*ws*/) {
 static void http_options_handler(uWS::HttpResponse<false> *res,
                                  uWS::HttpRequest * /*req*/) {
   // CORS preflight
+  res->writeStatus("204 No Content");
   res->writeHeader("Access-Control-Allow-Origin", "*");
   res->writeHeader("Access-Control-Allow-Headers", "*");
   res->writeHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res->writeStatus("204 No Content");
   res->end();
 }
 
