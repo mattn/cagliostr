@@ -546,9 +546,6 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
           }
         }
       }
-      nlohmann::json reply = {"OK", ev.id, true, ""};
-      relay_send(ws, reply);
-      return;
     } else if (ev.kind == 62) {
       // NIP-62: Request to Vanish
       // First, check if we should delete events for this relay
@@ -597,9 +594,6 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
           relay_send(s.ws, reply);
         }
       }
-      nlohmann::json reply = {"OK", ev.id, true, ""};
-      relay_send(ws, reply);
-      return;
     } else {
       if (20000 <= ev.kind && ev.kind < 30000) {
         relay_notice(ws, ev.id, "error: ephemeral events not stored");
@@ -630,14 +624,14 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       }
     }
 
+    nlohmann::json reply = {"OK", ev.id, true, ""};
+    relay_send(ws, reply);
     for (const auto &s : subscribers) {
       if (matched_filters(s.filters, ev)) {
         nlohmann::json reply = {"EVENT", s.sub, ev};
         relay_send(s.ws, reply);
       }
     }
-    nlohmann::json reply = {"OK", ev.id, true, ""};
-    relay_send(ws, reply);
   } catch (std::exception &e) {
     console->warn("!! {}", e.what());
   }
