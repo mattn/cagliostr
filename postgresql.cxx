@@ -32,6 +32,35 @@ static std::string join(const std::vector<std::string> &v,
   return s;
 }
 
+static std::optional<event_t> get_event_by_id(const std::string &id) {
+  try {
+    pqxx::work txn(*conn);
+    pqxx::result r = txn.exec(
+        R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event WHERE id = ?)",
+        pqxx::params{id});
+    txn.commit();
+
+    if (r.empty())
+      return std::nullopt;
+
+    auto row = r.begin();
+
+    nlohmann::json ej;
+    ej["id"] = row["id"].c_str();
+    ej["pubkey"] = row["pubkey"].c_str();
+    ej["created_at"] = row["created_at"].as<int>();
+    ej["kind"] = row["kind"].as<int>();
+    const char *j = row["tags"].c_str();
+    ej["tags"] = nlohmann::json::parse(j);
+    ej["content"] = row["content"].c_str();
+    ej["sig"] = row["sig"].c_str();
+    return ej;
+  } catch (const std::exception &e) {
+    console->error("{}", e.what());
+    return std::nullopt;
+  }
+}
+
 static bool insert_record(const event_t &ev) {
   try {
     nlohmann::json jtags = nlohmann::json::array();
@@ -41,13 +70,14 @@ static bool insert_record(const event_t &ev) {
     std::string tags_str = jtags.dump();
 
     pqxx::work txn(*conn);
-    pqxx::result r = txn.exec(R"(
+    pqxx::result r =
+        txn.exec(R"(
       INSERT INTO event (
         id, pubkey, created_at, kind, tags, content, sig)
 	    VALUES ($1, $2, $3, $4, $5, $6, $7)
 	    ON CONFLICT (id) DO NOTHING)",
-                              {ev.id, ev.pubkey, ev.created_at, ev.kind,
-                               tags_str, ev.content, ev.sig});
+                 pqxx::params{ev.id, ev.pubkey, ev.created_at, ev.kind,
+                              tags_str, ev.content, ev.sig});
     txn.commit();
     return r.affected_rows() > 0;
   } catch (const std::exception &e) {
@@ -226,7 +256,8 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
   return true;
 }
 
-static int delete_record_by_id_and_pubkey(const std::string &id, const std::string &pubkey) {
+static int delete_record_by_id_and_pubkey(const std::string &id,
+                                          const std::string &pubkey) {
   const auto sql = R"(DELETE FROM event WHERE id = $1 AND pubkey = $2)";
   pqxx::work txn(*conn);
   try {
@@ -265,7 +296,8 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
         R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags::text LIKE $3 ESCAPE '\' AND created_at < $4)",
-        {kind, pubkey, "%" + escape_like(data.dump()) + "%", created_at});
+        pqxx::params{kind, pubkey, "%" + escape_like(data.dump()) + "%",
+                     created_at});
     txn.commit();
 
     for (const auto &row : r) {
@@ -298,10 +330,9 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   return affected;
 }
 
-
 static int
 delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
-                                          const std::vector<std::string> &tag) {
+                                      const std::vector<std::string> &tag) {
   nlohmann::json data = tag;
   std::vector<std::string> ids;
 
@@ -309,7 +340,7 @@ delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
         R"(SELECT id FROM event WHERE id = $1 AND kind = $2 AND tags LIKE $3 ESCAPE '\')",
-        {id, kind, "%" + escape_like(data.dump()) + "%"});
+        pqxx::params{id, kind, "%" + escape_like(data.dump()) + "%"});
     txn.commit();
 
     for (const auto &row : r) {
@@ -410,12 +441,14 @@ static void storage_deinit() { conn.reset(); }
 void storage_context_init_postgresql(storage_context_t &ctx) {
   ctx.init = storage_init;
   ctx.deinit = storage_deinit;
+  ctx.get_event_by_id = get_event_by_id;
   ctx.insert_record = insert_record;
   ctx.delete_record_by_id_and_pubkey = delete_record_by_id_and_pubkey;
   ctx.delete_record_by_kind_and_pubkey = delete_record_by_kind_and_pubkey;
   ctx.delete_record_by_kind_and_pubkey_and_dtag =
       delete_record_by_kind_and_pubkey_and_dtag;
-  ctx.delete_record_by_id_and_kind_and_ptag = delete_record_by_id_and_kind_and_ptag;
+  ctx.delete_record_by_id_and_kind_and_ptag =
+      delete_record_by_id_and_kind_and_ptag;
   ctx.delete_all_events_by_pubkey = delete_all_events_by_pubkey;
   ctx.send_records = send_records;
 }

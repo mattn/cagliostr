@@ -32,6 +32,37 @@ static std::string join(const std::vector<std::string> &v,
   return s;
 }
 
+static std::optional<event_t> get_event_by_id(const std::string &id) {
+  std::string sql =
+      R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event WHERE id = ?)";
+
+  sqlite3_stmt *stmt = nullptr;
+  auto ret =
+      sqlite3_prepare_v2(conn, sql.data(), (int)sql.size(), &stmt, nullptr);
+  if (ret != SQLITE_OK) {
+    console->error("{}", sqlite3_errmsg(conn));
+    return std::nullopt;
+  }
+
+  sqlite3_bind_text(stmt, 1, id.data(), (int)id.size(), SQLITE_TRANSIENT);
+  ret = sqlite3_step(stmt);
+  if (ret == SQLITE_DONE) {
+    sqlite3_finalize(stmt);
+    return std::nullopt;
+  }
+
+  nlohmann::json ej;
+  ej["id"] = (char *)sqlite3_column_text(stmt, 0);
+  ej["pubkey"] = (char *)sqlite3_column_text(stmt, 1);
+  ej["created_at"] = sqlite3_column_int(stmt, 2);
+  ej["kind"] = sqlite3_column_int(stmt, 3);
+  const unsigned char *j = sqlite3_column_text(stmt, 4);
+  ej["tags"] = nlohmann::json::parse(j);
+  ej["content"] = (char *)sqlite3_column_text(stmt, 5);
+  ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
+  return ej;
+}
+
 static bool insert_record(const event_t &ev) {
   const auto sql =
       R"(INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) VALUES (?, ?, ?, ?, ?, ?, ?))";
@@ -255,7 +286,8 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
   return true;
 }
 
-static int delete_record_by_id_and_pubkey(const std::string &id, const std::string &pubkey) {
+static int delete_record_by_id_and_pubkey(const std::string &id,
+                                          const std::string &pubkey) {
   const auto sql = R"(DELETE FROM event WHERE id = ? AND pubkey = ?)";
   sqlite3_stmt *stmt = nullptr;
   auto ret = sqlite3_prepare_v2(conn, sql, (int)strlen(sql), &stmt, nullptr);
@@ -264,7 +296,8 @@ static int delete_record_by_id_and_pubkey(const std::string &id, const std::stri
     return -1;
   }
   sqlite3_bind_text(stmt, 1, id.data(), (int)id.size(), SQLITE_TRANSIENT);
-  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(), SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(),
+                    SQLITE_TRANSIENT);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
@@ -373,7 +406,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
 
 static int
 delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
-                                          const std::vector<std::string> &tag) {
+                                      const std::vector<std::string> &tag) {
   std::string sql =
       R"(SELECT id FROM event WHERE id = ? AND kind = ? AND tags LIKE ? ESCAPE '\')";
 
@@ -513,12 +546,14 @@ static void storage_deinit() { sqlite3_close_v2(conn); }
 void storage_context_init_sqlite3(storage_context_t &ctx) {
   ctx.init = storage_init;
   ctx.deinit = storage_deinit;
+  ctx.get_event_by_id = get_event_by_id;
   ctx.insert_record = insert_record;
   ctx.delete_record_by_id_and_pubkey = delete_record_by_id_and_pubkey;
   ctx.delete_record_by_kind_and_pubkey = delete_record_by_kind_and_pubkey;
   ctx.delete_record_by_kind_and_pubkey_and_dtag =
       delete_record_by_kind_and_pubkey_and_dtag;
-  ctx.delete_record_by_id_and_kind_and_ptag = delete_record_by_id_and_kind_and_ptag;
+  ctx.delete_record_by_id_and_kind_and_ptag =
+      delete_record_by_id_and_kind_and_ptag;
   ctx.delete_all_events_by_pubkey = delete_all_events_by_pubkey;
   ctx.send_records = send_records;
 }

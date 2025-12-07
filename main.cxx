@@ -484,25 +484,6 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   return found;
 }
 
-static void to_json(nlohmann::json &j, const event_t &e) {
-  j = nlohmann::json{
-      {"id", e.id},           {"pubkey", e.pubkey},
-      {"content", e.content}, {"created_at", e.created_at},
-      {"kind", e.kind},       {"tags", e.tags},
-      {"sig", e.sig},
-  };
-}
-
-static void from_json(const nlohmann::json &j, event_t &e) {
-  j.at("id").get_to(e.id);
-  j.at("pubkey").get_to(e.pubkey);
-  j.at("content").get_to(e.content);
-  j.at("created_at").get_to(e.created_at);
-  j.at("kind").get_to(e.kind);
-  j.at("tags").get_to(e.tags);
-  j.at("sig").get_to(e.sig);
-}
-
 static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
   try {
     const event_t ev = data[1];
@@ -539,16 +520,24 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       for (const auto &tag : ev.tags) {
         if (tag.size() >= 2 && tag[0] == "e") {
           for (size_t i = 1; i < tag.size(); i++) {
-            if (ev.kind == 1059) {
-              std::vector<std::string> tag = {"p", ev.pubkey};
-              if (storage_ctx.delete_record_by_id_and_kind_and_ptag(tag[i], ev.kind, tag) <= 0) {
-                relay_notice(ws, ev.id, "error: only the recipient can delete gift-wrapped");
-                return;
+            auto evv = storage_ctx.get_event_by_id(tag[i]);
+            if (!evv) {
+              relay_notice(ws, ev.id, "error: failed to delete event");
+            } else if (evv->kind == 1059) {
+              std::vector<std::string> ptag = {"p", ev.pubkey};
+              auto r = storage_ctx.delete_record_by_id_and_kind_and_ptag(
+                  tag[i], 1059, ptag);
+              if (r == 0) {
+                relay_notice(
+                    ws, "error: only the recipient can delete gift-wrapped");
+              } else if (r < 0) {
+                relay_notice(ws, "error: failed to delete event");
               }
             } else {
-              if (storage_ctx.delete_record_by_id_and_pubkey(tag[i], ev.pubkey) <= 0) {
-                relay_notice(ws, ev.id, "error: failed to delete event");
-                return;
+              auto r =
+                  storage_ctx.delete_record_by_id_and_pubkey(tag[i], ev.pubkey);
+              if (r <= 0) {
+                relay_notice(ws, "error: failed to delete event");
               }
             }
           }
@@ -585,14 +574,14 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
         // propagation)
         if (storage_ctx.delete_all_events_by_pubkey(ev.pubkey, ev.created_at) <
             0) {
-          relay_notice(ws, ev.id, "error: failed to vanish events");
+          relay_notice(ws, "error: failed to vanish events");
           return;
         }
       }
 
       // Always store kind 62 event for propagation to other relays
       if (!storage_ctx.insert_record(ev)) {
-        relay_notice(ws, ev.id, "error: duplicate event");
+        relay_notice(ws, "error: duplicate event");
         return;
       }
 
@@ -604,13 +593,13 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       }
     } else {
       if (20000 <= ev.kind && ev.kind < 30000) {
-        relay_notice(ws, ev.id, "error: ephemeral events not stored");
+        relay_notice(ws, "error: ephemeral events not stored");
         return;
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
         if (storage_ctx.delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey,
                                                          ev.created_at) < 0) {
-          relay_notice(ws, ev.id, "error: failed to replace event");
+          relay_notice(ws, "error: failed to replace event");
           return;
         }
       } else if (30000 <= ev.kind && ev.kind < 40000) {
@@ -619,7 +608,7 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
           if (tag.size() >= 2 && tag[0] == "d") {
             if (storage_ctx.delete_record_by_kind_and_pubkey_and_dtag(
                     ev.kind, ev.pubkey, tag, ev.created_at) < 0) {
-              relay_notice(ws, ev.id, "error: failed to replace event");
+              relay_notice(ws, "error: failed to replace event");
               return;
             }
           }
@@ -627,7 +616,7 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       }
 
       if (!storage_ctx.insert_record(ev)) {
-        relay_notice(ws, ev.id, "error: duplicate event");
+        relay_notice(ws, "error: duplicate event");
         return;
       }
     }
@@ -742,7 +731,7 @@ static void signal_handler(int /*signum*/) {
     if (s.ws == nullptr) {
       continue;
     }
-    relay_notice(s.ws, s.sub, "shutdown...");
+    relay_notice(s.ws, "shutdown...");
   }
   if (global_app) {
     global_app->close();
