@@ -226,11 +226,11 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
   return true;
 }
 
-static int delete_record_by_id(const std::string &id) {
-  const auto sql = R"(DELETE FROM event WHERE id = $1)";
+static int delete_record_by_id_and_pubkey(const std::string &id, const std::string &pubkey) {
+  const auto sql = R"(DELETE FROM event WHERE id = $1 AND pubkey = $2)";
   pqxx::work txn(*conn);
   try {
-    pqxx::result r = txn.exec(sql, pqxx::params{id});
+    pqxx::result r = txn.exec(sql, pqxx::params{id, pubkey});
     txn.commit();
     return r.affected_rows();
   } catch (const std::exception &e) {
@@ -298,6 +298,49 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   return affected;
 }
 
+
+static int
+delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
+                                          const std::vector<std::string> &tag) {
+  nlohmann::json data = tag;
+  std::vector<std::string> ids;
+
+  {
+    pqxx::work txn(*conn);
+    pqxx::result r = txn.exec(
+        R"(SELECT id FROM event WHERE id = $1 AND kind = $2 AND tags LIKE $3 ESCAPE '\')",
+        {id, kind, "%" + escape_like(data.dump()) + "%"});
+    txn.commit();
+
+    for (const auto &row : r) {
+      ids.push_back(row["id"].c_str());
+    }
+  }
+  data.clear();
+
+  if (ids.empty()) {
+    return 0;
+  }
+
+  std::string condition;
+  pqxx::params params;
+  for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
+    condition += "$" + std::to_string(i + 1) + ",";
+    params.append(ids[i]);
+  }
+  condition.pop_back();
+
+  int affected = 0;
+  {
+    pqxx::work txn(*conn);
+    pqxx::result r =
+        txn.exec("DELETE FROM event WHERE id IN (" + condition + ")", params);
+    affected = r.affected_rows();
+    txn.commit();
+  }
+
+  return affected;
+}
 static int delete_all_events_by_pubkey(const std::string &pubkey,
                                        std::time_t created_at) {
   const auto sql =
@@ -368,10 +411,11 @@ void storage_context_init_postgresql(storage_context_t &ctx) {
   ctx.init = storage_init;
   ctx.deinit = storage_deinit;
   ctx.insert_record = insert_record;
-  ctx.delete_record_by_id = delete_record_by_id;
+  ctx.delete_record_by_id_and_pubkey = delete_record_by_id_and_pubkey;
   ctx.delete_record_by_kind_and_pubkey = delete_record_by_kind_and_pubkey;
   ctx.delete_record_by_kind_and_pubkey_and_dtag =
       delete_record_by_kind_and_pubkey_and_dtag;
+  ctx.delete_record_by_id_and_kind_and_ptag = delete_record_by_id_and_kind_and_ptag;
   ctx.delete_all_events_by_pubkey = delete_all_events_by_pubkey;
   ctx.send_records = send_records;
 }

@@ -41,10 +41,10 @@ static void test_cagliostr_records() {
 
   _ok(!storage_ctx.insert_record(ev), "duplicated event must be rejected");
 
-  // tests for delete_record_by_id
-  _ok(storage_ctx.delete_record_by_id("bb97556f36930838b8593b9e3dd130182e77f34ddf6c8e351b41b1753dc2580b") == 0, "delete_record_by_id should be failed for invalid id");
+  // tests for delete_record_by_id_and_pubkey
+  _ok(storage_ctx.delete_record_by_id_and_pubkey("bb97556f36930838b8593b9e3dd130182e77f34ddf6c8e351b41b1753dc2580b", "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc") == 0, "delete_record_by_id_and_pubkey should be failed for invalid id");
 
-  _ok(storage_ctx.delete_record_by_id("bb97556f36930838b8593b9e3dd130182e77f34ddf6c8e351b41b1753dc2580a") == 1, "delete_record_by_id should be succeeded for valid id");
+  _ok(storage_ctx.delete_record_by_id_and_pubkey("bb97556f36930838b8593b9e3dd130182e77f34ddf6c8e351b41b1753dc2580a", "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc") == 1, "delete_record_by_id_and_pubkey should be succeeded for valid id");
 
   // tests for delete_record_by_kind_and_pubkey
   _ok(storage_ctx.insert_record(ev), "insert_records should be succeeded");

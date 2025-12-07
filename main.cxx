@@ -539,9 +539,17 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       for (const auto &tag : ev.tags) {
         if (tag.size() >= 2 && tag[0] == "e") {
           for (size_t i = 1; i < tag.size(); i++) {
-            if (storage_ctx.delete_record_by_id(tag[i]) < 0) {
-              relay_notice(ws, ev.id, "error: failed to delete event");
-              return;
+            if (ev.kind == 1059) {
+              std::vector<std::string> tag = {"p", ev.pubkey};
+              if (storage_ctx.delete_record_by_id_and_kind_and_ptag(tag[i], ev.kind, tag) <= 0) {
+                relay_notice(ws, ev.id, "error: only the recipient can delete gift-wrapped");
+                return;
+              }
+            } else {
+              if (storage_ctx.delete_record_by_id_and_pubkey(tag[i], ev.pubkey) <= 0) {
+                relay_notice(ws, ev.id, "error: failed to delete event");
+                return;
+              }
             }
           }
         }
