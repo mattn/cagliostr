@@ -36,7 +36,7 @@ static std::optional<event_t> get_event_by_id(const std::string &id) {
   try {
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
-        R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event WHERE id = ?)",
+        R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event WHERE id = $1)",
         pqxx::params{id});
     txn.commit();
 
