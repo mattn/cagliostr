@@ -295,8 +295,8 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   {
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
-        R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags::text LIKE $3 ESCAPE '\' AND created_at < $4)",
-        pqxx::params{kind, pubkey, "%" + escape_like(data.dump()) + "%",
+        R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tagvalues && ARRAY[$3]::text[] AND created_at < $4)",
+        pqxx::params{kind, pubkey, data.dump(),
                      created_at});
     txn.commit();
 
@@ -339,8 +339,8 @@ delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
   {
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
-        R"(SELECT id FROM event WHERE id = $1 AND kind = $2 AND tags LIKE $3 ESCAPE '\')",
-        pqxx::params{id, kind, "%" + escape_like(data.dump()) + "%"});
+        R"(SELECT id FROM event WHERE id = $1 AND kind = $2 AND tagvalues && ARRAY[$3]::text[]')",
+        pqxx::params{id, kind, data.dump()});
     txn.commit();
 
     for (const auto &row : r) {
