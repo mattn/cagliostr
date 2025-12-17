@@ -289,13 +289,13 @@ static int
 delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
                                           const std::vector<std::string> &tag,
                                           std::time_t created_at) {
-  nlohmann::json data = tag;
+  nlohmann::json data = nlohmann::json::array({tag});
   std::vector<std::string> ids;
 
   {
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
-        R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tagvalues && ARRAY[$3]::text[] AND created_at < $4)",
+        R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags @> $3::jsonb AND created_at < $4)",
         pqxx::params{kind, pubkey, data.dump(),
                      created_at});
     txn.commit();
@@ -333,13 +333,13 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
 static int
 delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
                                       const std::vector<std::string> &tag) {
-  nlohmann::json data = tag;
+  nlohmann::json data = nlohmann::json::array({tag});
   std::vector<std::string> ids;
 
   {
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
-        R"(SELECT id FROM event WHERE id = $1 AND kind = $2 AND tagvalues && ARRAY[$3]::text[]')",
+        R"(SELECT id FROM event WHERE id = $1 AND kind = $2 AND tags @> $3::jsonb)",
         pqxx::params{id, kind, data.dump()});
     txn.commit();
 
@@ -372,6 +372,7 @@ delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
 
   return affected;
 }
+
 static int delete_all_events_by_pubkey(const std::string &pubkey,
                                        std::time_t created_at) {
   const auto sql =
