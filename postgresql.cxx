@@ -204,9 +204,8 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.append("%" + escape_like(filter.search) + "%");
-      conditions.push_back(R"(content LIKE $)" + std::to_string(++pno) +
-                           R"( ESCAPE '\')");
+      params.append(filter.search);
+      conditions.push_back(R"(LENGTH(content) <= 600 AND to_tsvector('simple', content) @@ to_tsquery('simple', $)" + std::to_string(++pno) + ")");
     }
     if (!conditions.empty()) {
       sql += " WHERE " + join(conditions, " AND ");
