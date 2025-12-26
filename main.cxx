@@ -479,6 +479,23 @@ static bool matched_filters(const std::vector<filter_t> &filters,
         continue;
       }
     }
+    if (!filter.search.empty() && !ev.content.empty()) {
+      auto found_search = true;
+      std::string content = ev.content;
+      std::transform(content.begin(), content.end(), content.begin(), ::tolower);
+      std::istringstream iss(filter.search);
+      std::string word;
+      while (iss >> word) {
+        std::transform(word.begin(), word.end(), word.begin(), ::tolower);
+        if (content.find(word) == std::string::npos) {
+          found_search = false;
+          break;
+        }
+      }
+      if (!found_search) {
+        continue;
+      }
+    }
     found = true;
   }
   return found;
