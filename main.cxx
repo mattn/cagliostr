@@ -508,6 +508,11 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
     for (const auto &tag : ev.tags) {
       if (tag.size() == 1 && tag[0] == "-") {
         if (!check_auth_pubkey(ws, ev.pubkey)) {
+          auto *data = ws->getUserData();
+          if (data) {
+            nlohmann::json auth = {"AUTH", data->challenge};
+            relay_send(ws, auth);
+          }
           const auto reply = nlohmann::json::array(
               {"OK", ev.id, false, "auth-required: authentication required"});
           relay_send(ws, reply);
@@ -743,9 +748,6 @@ static void ws_open_handler(WebSocket *ws) {
   data->ip = std::string(ws->getRemoteAddressAsText());
   data->challenge = generate_random_hex_16();
   data->pubkey = "";
-
-  nlohmann::json auth = {"AUTH", data->challenge};
-  relay_send(ws, auth);
 
   console->debug("CONNECTED {}", data->ip);
 }
