@@ -3,6 +3,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <pqxx/pqxx>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -204,7 +205,18 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.append(filter.search);
+      std::string search_query;
+      std::istringstream iss(filter.search);
+      std::string word;
+      bool first = true;
+      while (iss >> word) {
+        if (!first) {
+          search_query += " & ";
+        }
+        search_query += word;
+        first = false;
+      }
+      params.append(search_query);
       conditions.push_back(R"(LENGTH(content) <= 600 AND to_tsvector('simple', content) @@ to_tsquery('simple', $)" + std::to_string(++pno) + ")");
     }
     if (!conditions.empty()) {
