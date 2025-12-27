@@ -213,7 +213,15 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         if (!first) {
           search_query += " & ";
         }
-        search_query += word;
+        // Escape special tsquery characters
+        std::string escaped_word;
+        for (char c : word) {
+          if (c == '&' || c == '|' || c == '!' || c == '(' || c == ')' || c == ':' || c == '\'' || c == '\\') {
+            escaped_word += '\\';
+          }
+          escaped_word += c;
+        }
+        search_query += escaped_word;
         first = false;
       }
       params.append(search_query);
