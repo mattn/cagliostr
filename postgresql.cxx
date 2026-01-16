@@ -1,6 +1,7 @@
 #include "cagliostr.hxx"
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <pqxx/pqxx>
 #include <sstream>
@@ -8,9 +9,33 @@
 #include <vector>
 
 static std::unique_ptr<pqxx::connection> conn;
+static std::string connection_dsn;
+static std::mutex conn_mutex;
 
 #define PARAM_TYPE_NUMBER (0)
 #define PARAM_TYPE_STRING (1)
+
+// Helper function to ensure connection is alive and reconnect if needed
+static bool ensure_connection() {
+  std::lock_guard<std::mutex> lock(conn_mutex);
+  try {
+    if (!conn || !conn->is_open()) {
+      console->warn("Connection lost, attempting to reconnect...");
+      conn = std::unique_ptr<pqxx::connection>(
+          new pqxx::connection(connection_dsn));
+      if (!conn->is_open()) {
+        console->error("Failed to reconnect to database");
+        return false;
+      }
+      console->info("Successfully reconnected to database");
+      return true;
+    }
+    return true;
+  } catch (const std::exception &e) {
+    console->error("Connection check failed: {}", e.what());
+    return false;
+  }
+}
 
 using param_t = struct param_t {
   int t{};
@@ -35,6 +60,9 @@ static std::string join(const std::vector<std::string> &v,
 
 static std::optional<event_t> get_event_by_id(const std::string &id) {
   try {
+    if (!ensure_connection()) {
+      return std::nullopt;
+    }
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
         R"(SELECT id, pubkey, created_at, kind, tags, content, sig FROM event WHERE id = $1)",
@@ -64,6 +92,9 @@ static std::optional<event_t> get_event_by_id(const std::string &id) {
 
 static bool insert_record(const event_t &ev) {
   try {
+    if (!ensure_connection()) {
+      return false;
+    }
     nlohmann::json jtags = nlohmann::json::array();
     for (const auto &tag : ev.tags) {
       jtags.push_back(nlohmann::json(tag));
@@ -117,6 +148,9 @@ static std::string make_placeholders(size_t n, int &pno) {
 static bool send_records(std::function<void(const nlohmann::json &)> sender,
                          const std::string &sub,
                          const std::vector<filter_t> &filters, bool do_count) {
+  if (!ensure_connection()) {
+    return false;
+  }
   auto count = 0;
   for (const auto &filter : filters) {
     std::string sql;
@@ -205,8 +239,10 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.append(filter.searc);
-      conditions.push_back(R"(LENGTH(content) <= 600 AND to_tsvector('simple', content) @@ plainto_tsquery('simple', $)" + std::to_string(++pno) + ")");
+      params.append(filter.search);
+      conditions.push_back(
+          R"(LENGTH(content) <= 600 AND to_tsvector('simple', content) @@ plainto_tsquery('simple', $)" +
+          std::to_string(++pno) + ")");
     }
     if (!conditions.empty()) {
       sql += " WHERE " + join(conditions, " AND ");
@@ -258,6 +294,9 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
 
 static int delete_record_by_id_and_pubkey(const std::string &id,
                                           const std::string &pubkey) {
+  if (!ensure_connection()) {
+    return -1;
+  }
   const auto sql = R"(DELETE FROM event WHERE id = $1 AND pubkey = $2)";
   pqxx::work txn(*conn);
   try {
@@ -272,6 +311,9 @@ static int delete_record_by_id_and_pubkey(const std::string &id,
 
 static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey,
                                             std::time_t created_at) {
+  if (!ensure_connection()) {
+    return -1;
+  }
   const auto sql =
       R"(DELETE FROM event WHERE kind = $1 AND pubkey = $2 AND created_at < $3)";
   pqxx::work txn(*conn);
@@ -289,6 +331,9 @@ static int
 delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
                                           const std::vector<std::string> &tag,
                                           std::time_t created_at) {
+  if (!ensure_connection()) {
+    return -1;
+  }
   nlohmann::json data = nlohmann::json::array({tag});
   std::vector<std::string> ids;
 
@@ -296,8 +341,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
     pqxx::work txn(*conn);
     pqxx::result r = txn.exec(
         R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags @> $3::jsonb AND created_at < $4)",
-        pqxx::params{kind, pubkey, data.dump(),
-                     created_at});
+        pqxx::params{kind, pubkey, data.dump(), created_at});
     txn.commit();
 
     for (const auto &row : r) {
@@ -333,6 +377,9 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
 static int
 delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
                                       const std::vector<std::string> &tag) {
+  if (!ensure_connection()) {
+    return -1;
+  }
   nlohmann::json data = nlohmann::json::array({tag});
   std::vector<std::string> ids;
 
@@ -375,6 +422,9 @@ delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
 
 static int delete_all_events_by_pubkey(const std::string &pubkey,
                                        std::time_t created_at) {
+  if (!ensure_connection()) {
+    return -1;
+  }
   const auto sql =
       R"(DELETE FROM event WHERE pubkey = $1 AND created_at <= $2 AND kind != 62)";
   pqxx::work txn(*conn);
@@ -392,6 +442,7 @@ static void storage_init(const std::string &dsn) {
   console->debug("initialize storage");
 
   try {
+    connection_dsn = dsn;
     conn = std::unique_ptr<pqxx::connection>(new pqxx::connection(dsn));
     if (!conn->is_open()) {
       console->debug("unable to connect to database");
