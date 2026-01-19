@@ -482,7 +482,8 @@ static bool matched_filters(const std::vector<filter_t> &filters,
     if (!filter.search.empty() && !ev.content.empty()) {
       auto found_search = true;
       std::string content = ev.content;
-      std::transform(content.begin(), content.end(), content.begin(), ::tolower);
+      std::transform(content.begin(), content.end(), content.begin(),
+                     ::tolower);
       std::istringstream iss(filter.search);
       std::string word;
       while (iss >> word) {
@@ -539,32 +540,39 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
     }
 
     if (ev.kind == 5) {
+      bool delete_failed = false;
       for (const auto &tag : ev.tags) {
         if (tag.size() >= 2 && tag[0] == "e") {
           for (size_t i = 1; i < tag.size(); i++) {
             auto evv = storage_ctx.get_event_by_id(tag[i]);
-            if (!evv) {
-              relay_notice(ws, ev.id, "error: failed to delete event");
-            } else if (evv->kind == 1059) {
-              std::vector<std::string> ptag = {"p", ev.pubkey};
-              auto r = storage_ctx.delete_record_by_id_and_kind_and_ptag(
-                  tag[i], 1059, ptag);
-              if (r == 0) {
-                relay_notice(
-                    ws, "error: only the recipient can delete gift-wrapped");
-              } else if (r < 0) {
-                relay_notice(ws, "error: failed to delete event");
-              }
-            } else {
-              auto r =
-                  storage_ctx.delete_record_by_id_and_pubkey(tag[i], ev.pubkey);
-              if (r <= 0) {
-                relay_notice(ws, "error: failed to delete event");
+            if (evv) {
+              if (evv->kind == 1059) {
+                std::vector<std::string> ptag = {"p", ev.pubkey};
+                auto r = storage_ctx.delete_record_by_id_and_kind_and_ptag(
+                    tag[i], 1059, ptag);
+                if (r <= 0) {
+                  delete_failed = true;
+                }
+              } else {
+                auto r = storage_ctx.delete_record_by_id_and_pubkey(tag[i],
+                                                                    ev.pubkey);
+                if (r <= 0) {
+                  delete_failed = true;
+                }
               }
             }
           }
         }
       }
+
+      nlohmann::json reply;
+      if (delete_failed) {
+        reply = {"OK", ev.id, false, "deletion failed"};
+      } else {
+        reply = {"OK", ev.id, true, ""};
+      }
+      relay_send(ws, reply);
+      return;
     } else if (ev.kind == 62) {
       // NIP-62: Request to Vanish
       // First, check if we should delete events for this relay
