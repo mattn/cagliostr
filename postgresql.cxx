@@ -213,11 +213,11 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         if (tag.size() < 2) {
           continue;
         }
-        for (decltype(tag.size()) i = 0; i < tag.size(); i++) {
+        for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
           params.append(tag[i]);
         }
         match.push_back(R"(tagvalues && ARRAY[)" +
-                        make_placeholders(tag.size(), pno) + "]");
+                        make_placeholders(tag.size() - 1, pno) + "]");
       }
       if (match.size() == 1) {
         conditions.push_back(match.front());
