@@ -623,12 +623,15 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
         return;
       }
 
+      nlohmann::json ok_reply = {"OK", ev.id, true, ""};
+      relay_send(ws, ok_reply);
       for (const auto &s : subscribers) {
         if (matched_filters(s.filters, ev)) {
           nlohmann::json reply = {"EVENT", s.sub, ev};
           relay_send(s.ws, reply);
         }
       }
+      return;
     } else {
       if (20000 <= ev.kind && ev.kind < 30000) {
         relay_notice(ws, "error: ephemeral events not stored");
