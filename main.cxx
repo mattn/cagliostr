@@ -459,23 +459,31 @@ static bool matched_filters(const std::vector<filter_t> &filters,
       }
     }
     if (!filter.tags.empty()) {
-      auto matched = false;
-      for (const auto &tag : ev.tags) {
-        if (tag.size() < 2)
+      auto all_tags_matched = true;
+      for (const auto &filter_tag : filter.tags) {
+        if (filter_tag.size() < 2)
           continue;
-        for (const auto &filter_tag : filter.tags) {
-          if (filter_tag.size() < 2)
+        bool this_tag_matched = false;
+        for (const auto &tag : ev.tags) {
+          if (tag.size() < 2)
             continue;
-          if (tag == filter_tag) {
-            matched = true;
-            break;
+          if (tag[0] != filter_tag[0])
+            continue;
+          for (size_t fi = 1; fi < filter_tag.size(); fi++) {
+            if (tag[1] == filter_tag[fi]) {
+              this_tag_matched = true;
+              break;
+            }
           }
+          if (this_tag_matched)
+            break;
         }
-        if (matched) {
+        if (!this_tag_matched) {
+          all_tags_matched = false;
           break;
         }
       }
-      if (!matched) {
+      if (!all_tags_matched) {
         continue;
       }
     }
