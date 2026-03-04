@@ -374,7 +374,6 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
     return 0;
   }
 
-  std::ostringstream os;
   std::string condition;
   for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
     condition += "?,";
@@ -439,7 +438,6 @@ delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
     return 0;
   }
 
-  std::ostringstream os;
   std::string condition;
   for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
     condition += "?,";
