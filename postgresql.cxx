@@ -1,4 +1,5 @@
 #include "cagliostr.hxx"
+#include <charconv>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -119,13 +120,14 @@ static bool insert_record(const event_t &ev) {
 }
 
 static bool is_expired(std::vector<std::vector<std::string>> &tags) {
-  time_t now = time(nullptr), expiration;
+  time_t now = time(nullptr);
   for (const auto &tag : tags) {
     if (tag.size() == 2 && tag[0] == "expiration") {
-      std::stringstream ss;
-      ss << tag[1];
-      ss >> expiration;
-      if (expiration <= now) {
+      std::time_t expiration = 0;
+      auto first = tag[1].data();
+      auto last = first + tag[1].size();
+      auto [ptr, ec] = std::from_chars(first, last, expiration);
+      if (ec == std::errc() && ptr == last && expiration <= now) {
         return true;
       }
     }
