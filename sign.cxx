@@ -9,44 +9,66 @@
 #include <secp256k1.h>
 #include <secp256k1_schnorrsig.h>
 
+static inline int hex_value(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  return -1;
+}
+
 static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
   std::vector<uint8_t> bytes;
-  for (decltype(hex.length()) i = 0; i < hex.length(); i += 2) {
-    std::string s = hex.substr(i, 2);
-    auto byte = static_cast<uint8_t>(strtol(s.c_str(), nullptr, 16));
-    bytes.push_back(byte);
+  bytes.reserve(hex.size() / 2);
+  for (size_t i = 0; i + 1 < hex.size(); i += 2) {
+    auto hi = hex_value(hex[i]);
+    auto lo = hex_value(hex[i + 1]);
+    if (hi < 0 || lo < 0) {
+      return {};
+    }
+    bytes.push_back(static_cast<uint8_t>((hi << 4) | lo));
   }
   return bytes;
 }
 
 static inline std::string digest2hex(const uint8_t data[32]) {
-  std::stringstream ss;
-  ss << std::hex;
+  static constexpr char digits[] = "0123456789abcdef";
+  std::string hex(64, '\0');
   for (size_t i = 0; i < 32; ++i) {
-    ss << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+    hex[i * 2] = digits[data[i] >> 4];
+    hex[i * 2 + 1] = digits[data[i] & 0x0f];
   }
-  return ss.str();
+  return hex;
+}
+
+static secp256k1_context *verify_context() {
+  static secp256k1_context *ctx =
+      secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  return ctx;
 }
 
 static bool signature_verify(const std::vector<uint8_t> &bytes_sig,
                              const std::vector<uint8_t> &bytes_pub,
                              const uint8_t digest[32]) {
-#define secp256k1_context_flags                                                \
-  (SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY)
-  secp256k1_context *ctx = secp256k1_context_create(secp256k1_context_flags);
+  if (bytes_sig.size() != 64 || bytes_pub.size() != 32) {
+    return false;
+  }
+  auto *ctx = verify_context();
   secp256k1_xonly_pubkey pub;
   if (!secp256k1_xonly_pubkey_parse(ctx, &pub, bytes_pub.data())) {
-    secp256k1_context_destroy(ctx);
     return false;
   }
 
-  auto result = secp256k1_schnorrsig_verify(ctx, bytes_sig.data(), digest,
+  return secp256k1_schnorrsig_verify(ctx, bytes_sig.data(), digest,
 #ifdef SECP256K1_SCHNORRSIG_EXTRAPARAMS_INIT
-                                            32,
+                                     32,
 #endif
-                                            &pub);
-  secp256k1_context_destroy(ctx);
-  return result;
+                                     &pub);
 }
 
 static bool check_delegation(const event_t &ev,
@@ -83,9 +105,12 @@ static bool check_delegation(const event_t &ev,
     }
   }
 
-  std::stringstream delegation_data;
-  delegation_data << "nostr:delegation:" << ev.pubkey << ":" << conditions;
-  auto delegation_str = delegation_data.str();
+  std::string delegation_str;
+  delegation_str.reserve(18 + ev.pubkey.size() + conditions.size());
+  delegation_str += "nostr:delegation:";
+  delegation_str += ev.pubkey;
+  delegation_str += ":";
+  delegation_str += conditions;
 
   uint8_t delegation_digest[32] = {0};
   EVP_Digest(delegation_str.data(), delegation_str.size(), delegation_digest,
