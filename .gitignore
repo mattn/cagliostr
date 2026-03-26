@@ -42,6 +42,7 @@ cagliostr
 
 .idea
 build/
+build-codex/
 cmake-build-debug/
 kustomize/
 litestream.yaml

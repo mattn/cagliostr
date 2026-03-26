@@ -25,3 +25,4 @@
 [submodule "deps/unetworking-usockets"]
 	path = deps/unetworking-usockets
 	url = https://github.com/uNetworking/uSockets.git
+	ignore = dirty
