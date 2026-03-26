@@ -11,6 +11,7 @@
 #include <spdlog/spdlog.h>
 
 #include <filesystem>
+#include <vector>
 
 static event_t string2event(const std::string& string) {
   auto ej = nlohmann::json::parse(string);
@@ -25,12 +26,31 @@ static event_t string2event(const std::string& string) {
   return ev;
 }
 
-static void test_cagliostr_records() {
-  std::filesystem::remove("test.sqlite");
+static event_t make_event(const std::string& id, const std::string& pubkey,
+                          std::time_t created_at, int kind,
+                          std::vector<std::vector<std::string>> tags,
+                          const std::string& content) {
+  return event_t{
+      .id = id,
+      .pubkey = pubkey,
+      .created_at = created_at,
+      .kind = kind,
+      .tags = std::move(tags),
+      .content = content,
+      .sig = std::string(128, '0'),
+  };
+}
 
+static storage_context_t init_test_storage(const char* path = "test.sqlite") {
+  std::filesystem::remove(path);
   storage_context_t storage_ctx;
   storage_context_init_sqlite3(storage_ctx);
-  storage_ctx.init("test.sqlite");
+  storage_ctx.init(path);
+  return storage_ctx;
+}
+
+static void test_cagliostr_records() {
+  auto storage_ctx = init_test_storage();
   event_t ev;
 
   ev = string2event(
@@ -74,6 +94,213 @@ static void test_cagliostr_records() {
   storage_ctx.deinit();
 }
 
+static void test_event_json_roundtrip() {
+  auto original = make_event(
+      "event-json-roundtrip",
+      "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc",
+      1700000000, 30023,
+      {{"d", "article-1"}, {"p", "friend-pubkey"}, {"expiration", "4102444800"}},
+      "roundtrip payload");
+
+  nlohmann::json j = original;
+  auto restored = j.get<event_t>();
+
+  _ok(restored.id == original.id, "event id survives to_json/from_json");
+  _ok(restored.pubkey == original.pubkey,
+      "event pubkey survives to_json/from_json");
+  _ok(restored.created_at == original.created_at,
+      "event created_at survives to_json/from_json");
+  _ok(restored.kind == original.kind, "event kind survives to_json/from_json");
+  _ok(restored.tags == original.tags, "event tags survive to_json/from_json");
+  _ok(restored.content == original.content,
+      "event content survives to_json/from_json");
+  _ok(restored.sig == original.sig, "event sig survives to_json/from_json");
+}
+
+static void test_get_event_by_id() {
+  auto storage_ctx = init_test_storage();
+  auto inserted = make_event(
+      "event-get-1",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      1700000001, 1, {{"e", "root-event"}}, "fetch me");
+
+  _ok(storage_ctx.insert_record(inserted), "get_event_by_id setup insert");
+
+  auto found = storage_ctx.get_event_by_id(inserted.id);
+  _ok(found.has_value(), "get_event_by_id returns inserted event");
+  _ok(found->id == inserted.id, "get_event_by_id preserves id");
+  _ok(found->pubkey == inserted.pubkey, "get_event_by_id preserves pubkey");
+  _ok(found->content == inserted.content, "get_event_by_id preserves content");
+  _ok(found->tags == inserted.tags, "get_event_by_id preserves tags");
+
+  auto missing = storage_ctx.get_event_by_id("missing-event-id");
+  _ok(!missing.has_value(), "get_event_by_id returns nullopt for missing id");
+
+  storage_ctx.deinit();
+}
+
+static void test_send_records_filters() {
+  auto storage_ctx = init_test_storage();
+  auto pubkey1 =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  auto pubkey2 =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  auto now = std::time(nullptr);
+  auto ev1 = make_event("event-send-1", pubkey1, 1700000100, 1,
+                        {{"p", "friend-1"}, {"d", "article-1"}},
+                        "hello 100% match");
+  auto ev2 = make_event("event-send-2", pubkey2, 1700000200, 2,
+                        {{"p", "friend-2"}, {"d", "article-2"}},
+                        "other payload");
+  auto expired = make_event("event-send-3", pubkey1, 1700000300, 1,
+                            {{"expiration", std::to_string(now - 10)}},
+                            "expired payload");
+
+  _ok(storage_ctx.insert_record(ev1), "send_records setup insert ev1");
+  _ok(storage_ctx.insert_record(ev2), "send_records setup insert ev2");
+  _ok(storage_ctx.insert_record(expired), "send_records setup insert expired");
+
+  std::vector<nlohmann::json> replies;
+  auto sender = [&replies](const nlohmann::json& reply) { replies.push_back(reply); };
+
+  filter_t by_id;
+  by_id.ids = {ev1.id};
+  _ok(storage_ctx.send_records(sender, "sub-id", {by_id}, false),
+      "send_records succeeds for id filter");
+  _ok(replies.size() == 1, "send_records id filter returns one event");
+  _ok(replies[0][0] == "EVENT", "send_records returns EVENT message");
+  _ok(replies[0][1] == "sub-id", "send_records includes subscription id");
+  _ok(replies[0][2]["id"] == ev1.id, "send_records id filter matches event");
+  replies.clear();
+
+  filter_t by_author_kind;
+  by_author_kind.authors = {pubkey2};
+  by_author_kind.kinds = {2};
+  _ok(storage_ctx.send_records(sender, "sub-author-kind", {by_author_kind}, false),
+      "send_records succeeds for author and kind filters");
+  _ok(replies.size() == 1, "send_records author and kind filters return one event");
+  _ok(replies[0][2]["id"] == ev2.id,
+      "send_records author and kind filters match expected event");
+  replies.clear();
+
+  filter_t by_tag_search;
+  by_tag_search.tags = {{"p", "friend-1"}};
+  by_tag_search.search = "100%";
+  _ok(storage_ctx.send_records(sender, "sub-tag-search", {by_tag_search}, false),
+      "send_records succeeds for tag and search filters");
+  _ok(replies.size() == 1, "send_records tag and search filters return one event");
+  _ok(replies[0][2]["id"] == ev1.id,
+      "send_records tag and search filters match expected event");
+  replies.clear();
+
+  filter_t by_since_until;
+  by_since_until.since = 1700000150;
+  by_since_until.until = 1700000250;
+  _ok(storage_ctx.send_records(sender, "sub-time-range", {by_since_until}, false),
+      "send_records succeeds for since/until filter");
+  _ok(replies.size() == 1, "send_records since/until filter returns one event");
+  _ok(replies[0][2]["id"] == ev2.id,
+      "send_records since/until filter matches expected event");
+  replies.clear();
+
+  filter_t visible_only;
+  visible_only.until = 1700000250;
+  visible_only.limit = 2;
+  _ok(storage_ctx.send_records(sender, "sub-visible-limit", {visible_only}, false),
+      "send_records succeeds for limit filter over visible rows");
+  _ok(replies.size() == 2, "send_records respects limit for visible rows");
+  _ok(replies[0][2]["id"] == ev2.id, "send_records orders visible rows by created_at desc");
+  _ok(replies[1][2]["id"] == ev1.id, "send_records returns next visible row");
+  replies.clear();
+
+  filter_t all_rows;
+  all_rows.limit = 10;
+  _ok(storage_ctx.send_records(sender, "sub-expiration", {all_rows}, false),
+      "send_records succeeds when expired rows are present");
+  _ok(replies.size() == 2, "send_records omits expired events from EVENT replies");
+  _ok(replies[0][2]["id"] == ev2.id, "send_records still returns newest visible row");
+  _ok(replies[1][2]["id"] == ev1.id, "send_records still returns older visible row");
+  replies.clear();
+
+  _ok(storage_ctx.send_records(sender, "sub-count", {all_rows}, true),
+      "send_records succeeds for count");
+  _ok(replies.size() == 1, "send_records count returns one message");
+  _ok(replies[0][0] == "COUNT", "send_records count returns COUNT message");
+  _ok(replies[0][1] == "sub-count", "send_records count includes subscription id");
+  _ok(replies[0][2]["count"] == 3, "send_records count reflects matching rows");
+
+  storage_ctx.deinit();
+}
+
+static void test_delete_record_by_id_and_kind_and_ptag() {
+  auto storage_ctx = init_test_storage();
+  auto id = "event-ptag-1";
+  auto owner =
+      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+  auto matching = make_event(id, owner, 1700000400, 5, {{"p", "friend-ptag"}},
+                             "ptag target");
+  auto different_tag =
+      make_event("event-ptag-2", owner, 1700000401, 5, {{"p", "other-friend"}},
+                 "different ptag");
+
+  _ok(storage_ctx.insert_record(matching),
+      "delete_record_by_id_and_kind_and_ptag setup insert matching");
+  _ok(storage_ctx.insert_record(different_tag),
+      "delete_record_by_id_and_kind_and_ptag setup insert different");
+
+  std::vector<std::string> missing_tag = {"p", "missing-friend"};
+  std::vector<std::string> matching_tag = {"p", "friend-ptag"};
+
+  _ok(storage_ctx.delete_record_by_id_and_kind_and_ptag(id, 5, missing_tag) == 0,
+      "delete_record_by_id_and_kind_and_ptag ignores non-matching tag");
+  _ok(storage_ctx.delete_record_by_id_and_kind_and_ptag(id, 5, matching_tag) == 1,
+      "delete_record_by_id_and_kind_and_ptag deletes matching event");
+  _ok(!storage_ctx.get_event_by_id(id).has_value(),
+      "delete_record_by_id_and_kind_and_ptag removes deleted event");
+  _ok(storage_ctx.get_event_by_id(different_tag.id).has_value(),
+      "delete_record_by_id_and_kind_and_ptag keeps unrelated event");
+
+  storage_ctx.deinit();
+}
+
+static void test_delete_all_events_by_pubkey() {
+  auto storage_ctx = init_test_storage();
+  auto pubkey =
+      "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+  auto target = make_event("event-pubkey-1", pubkey, 1700000500, 1, {},
+                           "delete me");
+  auto preserve_kind62 =
+      make_event("event-pubkey-2", pubkey, 1700000501, 62, {}, "keep me");
+  auto preserve_newer =
+      make_event("event-pubkey-3", pubkey, 1700000600, 1, {}, "keep newer");
+  auto preserve_other_author = make_event(
+      "event-pubkey-4",
+      "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      1700000500, 1, {}, "keep other author");
+
+  _ok(storage_ctx.insert_record(target),
+      "delete_all_events_by_pubkey setup insert target");
+  _ok(storage_ctx.insert_record(preserve_kind62),
+      "delete_all_events_by_pubkey setup insert kind62");
+  _ok(storage_ctx.insert_record(preserve_newer),
+      "delete_all_events_by_pubkey setup insert newer");
+  _ok(storage_ctx.insert_record(preserve_other_author),
+      "delete_all_events_by_pubkey setup insert other author");
+
+  _ok(storage_ctx.delete_all_events_by_pubkey(pubkey, 1700000550) == 1,
+      "delete_all_events_by_pubkey deletes only matching non-kind62 rows");
+  _ok(!storage_ctx.get_event_by_id(target.id).has_value(),
+      "delete_all_events_by_pubkey removes older matching event");
+  _ok(storage_ctx.get_event_by_id(preserve_kind62.id).has_value(),
+      "delete_all_events_by_pubkey preserves kind 62");
+  _ok(storage_ctx.get_event_by_id(preserve_newer.id).has_value(),
+      "delete_all_events_by_pubkey preserves newer events");
+  _ok(storage_ctx.get_event_by_id(preserve_other_author.id).has_value(),
+      "delete_all_events_by_pubkey preserves other authors");
+
+  storage_ctx.deinit();
+}
+
 static void test_sql_injection_protection() {
   _ok(escape_like("x%x") == "x\\%x", "basic percent escape_like");
   _ok(escape_like("abc") == "abc", "no percent remains unchanged");
@@ -103,6 +330,12 @@ int main() {
   spdlog::set_level(spdlog::level::off);
 
   subtest("test_cagliostr_records", test_cagliostr_records);
+  subtest("test_event_json_roundtrip", test_event_json_roundtrip);
+  subtest("test_get_event_by_id", test_get_event_by_id);
+  subtest("test_send_records_filters", test_send_records_filters);
+  subtest("test_delete_record_by_id_and_kind_and_ptag",
+          test_delete_record_by_id_and_kind_and_ptag);
+  subtest("test_delete_all_events_by_pubkey", test_delete_all_events_by_pubkey);
   subtest("test_cagliostr_sign", test_cagliostr_sign);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
   return done_testing();
