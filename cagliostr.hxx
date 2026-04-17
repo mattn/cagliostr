@@ -27,6 +27,7 @@ using filter_t = struct filter_t {
   std::vector<std::string> authors{};
   std::vector<int> kinds{};
   std::vector<std::vector<std::string>> tags{};
+  std::vector<std::vector<std::string>> and_tags{};
   std::time_t since{};
   std::time_t until{};
   int limit{500};
