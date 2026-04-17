@@ -232,6 +232,52 @@ static void test_send_records_filters() {
   storage_ctx.deinit();
 }
 
+static void test_send_records_and_tags() {
+  auto storage_ctx = init_test_storage();
+  auto pubkey =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  auto both = make_event("event-and-1", pubkey, 1700001000, 1,
+                         {{"t", "meme"}, {"t", "cat"}}, "meme cat");
+  auto only_meme = make_event("event-and-2", pubkey, 1700001001, 1,
+                              {{"t", "meme"}}, "meme only");
+  auto only_cat = make_event("event-and-3", pubkey, 1700001002, 1,
+                             {{"t", "cat"}}, "cat only");
+
+  _ok(storage_ctx.insert_record(both), "and_tags setup insert both");
+  _ok(storage_ctx.insert_record(only_meme), "and_tags setup insert only_meme");
+  _ok(storage_ctx.insert_record(only_cat), "and_tags setup insert only_cat");
+
+  std::vector<nlohmann::json> replies;
+  auto sender = [&replies](const nlohmann::json& reply) { replies.push_back(reply); };
+
+  filter_t and_filter;
+  and_filter.and_tags = {{"t", "meme", "cat"}};
+  _ok(storage_ctx.send_records(sender, "sub-and", {and_filter}, false),
+      "send_records succeeds for and_tags filter");
+  _ok(replies.size() == 1, "and_tags filter returns only the event with both values");
+  _ok(replies[0][2]["id"] == both.id,
+      "and_tags filter matches the event holding all required values");
+  replies.clear();
+
+  filter_t or_filter;
+  or_filter.tags = {{"t", "meme", "cat"}};
+  _ok(storage_ctx.send_records(sender, "sub-or", {or_filter}, false),
+      "send_records succeeds for OR tags filter");
+  _ok(replies.size() == 3, "OR tags filter returns all events with either value");
+  replies.clear();
+
+  filter_t mixed;
+  mixed.and_tags = {{"t", "meme", "cat"}};
+  mixed.kinds = {1};
+  _ok(storage_ctx.send_records(sender, "sub-mixed", {mixed}, false),
+      "send_records succeeds for and_tags combined with kinds");
+  _ok(replies.size() == 1, "and_tags combined with kinds keeps AND semantics");
+  _ok(replies[0][2]["id"] == both.id,
+      "and_tags combined with kinds returns the matching event");
+
+  storage_ctx.deinit();
+}
+
 static void test_delete_record_by_id_and_kind_and_ptag() {
   auto storage_ctx = init_test_storage();
   auto id = "event-ptag-1";
@@ -333,6 +379,7 @@ int main() {
   subtest("test_event_json_roundtrip", test_event_json_roundtrip);
   subtest("test_get_event_by_id", test_get_event_by_id);
   subtest("test_send_records_filters", test_send_records_filters);
+  subtest("test_send_records_and_tags", test_send_records_and_tags);
   subtest("test_delete_record_by_id_and_kind_and_ptag",
           test_delete_record_by_id_and_kind_and_ptag);
   subtest("test_delete_all_events_by_pubkey", test_delete_all_events_by_pubkey);

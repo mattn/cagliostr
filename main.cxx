@@ -263,17 +263,25 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
     }
   }
   for (auto it = data.cbegin(); it != data.cend(); ++it) {
-    if (!it.key().empty() && it.key().front() == '#' && it.value().is_array()) {
-      std::vector<std::string> tag = {it.key().substr(1)};
-      for (const auto &v : it.value()) {
-        if (!v.is_string()) {
-          console->warn("make_filter: tag {} elements must be string",
-                        it.key());
-          return false;
-        }
-        tag.push_back(v.get<std::string>());
+    if (it.key().size() < 2 || !it.value().is_array()) {
+      continue;
+    }
+    const auto prefix = it.key().front();
+    if (prefix != '#' && prefix != '&') {
+      continue;
+    }
+    std::vector<std::string> tag = {it.key().substr(1)};
+    for (const auto &v : it.value()) {
+      if (!v.is_string()) {
+        console->warn("make_filter: tag {} elements must be string", it.key());
+        return false;
       }
-      filter.tags.push_back(tag);
+      tag.push_back(v.get<std::string>());
+    }
+    if (prefix == '&') {
+      filter.and_tags.push_back(std::move(tag));
+    } else {
+      filter.tags.push_back(std::move(tag));
     }
   }
   if (data.count("since") > 0) {
@@ -484,6 +492,32 @@ static bool matched_filters(const std::vector<filter_t> &filters,
         }
       }
       if (!all_tags_matched) {
+        continue;
+      }
+    }
+    if (!filter.and_tags.empty()) {
+      auto all_and_tags_matched = true;
+      for (const auto &filter_tag : filter.and_tags) {
+        if (filter_tag.size() < 2)
+          continue;
+        const auto &key = filter_tag[0];
+        for (size_t fi = 1; fi < filter_tag.size(); fi++) {
+          bool found = false;
+          for (const auto &tag : ev.tags) {
+            if (tag.size() >= 2 && tag[0] == key && tag[1] == filter_tag[fi]) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            all_and_tags_matched = false;
+            break;
+          }
+        }
+        if (!all_and_tags_matched)
+          break;
+      }
+      if (!all_and_tags_matched) {
         continue;
       }
     }
