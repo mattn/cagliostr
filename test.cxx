@@ -11,6 +11,7 @@
 #include <spdlog/spdlog.h>
 
 #include <filesystem>
+#include <set>
 #include <vector>
 
 static event_t string2event(const std::string& string) {
@@ -232,6 +233,174 @@ static void test_send_records_filters() {
   storage_ctx.deinit();
 }
 
+struct and_tags_fixture {
+  storage_context_t ctx;
+  event_t both_meme_cat;
+  event_t only_meme;
+  event_t only_cat;
+  event_t meme_dog;
+  event_t bob_meme_cat;
+};
+
+static and_tags_fixture make_and_tags_fixture() {
+  and_tags_fixture f{};
+  f.ctx = init_test_storage();
+  auto alice =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  auto bob =
+      "1111111111111111111111111111111111111111111111111111111111111111";
+  f.both_meme_cat = make_event(
+      "event-and-1", alice, 1700001000, 1,
+      {{"t", "meme"}, {"t", "cat"}, {"p", alice}}, "meme cat by alice");
+  f.only_meme = make_event("event-and-2", alice, 1700001001, 1,
+                           {{"t", "meme"}, {"p", alice}}, "meme only");
+  f.only_cat = make_event("event-and-3", alice, 1700001002, 1,
+                          {{"t", "cat"}, {"p", alice}}, "cat only");
+  f.meme_dog = make_event("event-and-4", alice, 1700001003, 1,
+                          {{"t", "meme"}, {"t", "dog"}, {"p", alice}},
+                          "meme dog");
+  f.bob_meme_cat = make_event(
+      "event-and-5", bob, 1700001004, 1,
+      {{"t", "meme"}, {"t", "cat"}, {"p", bob}}, "meme cat by bob");
+  _ok(f.ctx.insert_record(f.both_meme_cat), "and_tags fixture insert both_meme_cat");
+  _ok(f.ctx.insert_record(f.only_meme), "and_tags fixture insert only_meme");
+  _ok(f.ctx.insert_record(f.only_cat), "and_tags fixture insert only_cat");
+  _ok(f.ctx.insert_record(f.meme_dog), "and_tags fixture insert meme_dog");
+  _ok(f.ctx.insert_record(f.bob_meme_cat), "and_tags fixture insert bob_meme_cat");
+  return f;
+}
+
+static void test_and_tags_basic_match() {
+  auto f = make_and_tags_fixture();
+  std::vector<nlohmann::json> replies;
+  auto sender = [&replies](const nlohmann::json& reply) { replies.push_back(reply); };
+
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}};
+  _ok(f.ctx.send_records(sender, "sub-and-basic", {flt}, false),
+      "send_records succeeds for AND filter");
+  _ok(replies.size() == 2,
+      "AND filter returns only events carrying every requested value");
+  std::set<std::string> ids;
+  for (const auto &r : replies) ids.insert(r[2]["id"].get<std::string>());
+  _ok(ids.count(f.both_meme_cat.id) == 1,
+      "AND filter includes alice's meme+cat event");
+  _ok(ids.count(f.bob_meme_cat.id) == 1,
+      "AND filter includes bob's meme+cat event");
+  _ok(ids.count(f.only_meme.id) == 0, "AND filter excludes meme-only event");
+  _ok(ids.count(f.only_cat.id) == 0, "AND filter excludes cat-only event");
+  _ok(ids.count(f.meme_dog.id) == 0, "AND filter excludes meme+dog event");
+
+  f.ctx.deinit();
+}
+
+static void test_and_tags_no_match() {
+  auto f = make_and_tags_fixture();
+  std::vector<nlohmann::json> replies;
+  auto sender = [&replies](const nlohmann::json& reply) { replies.push_back(reply); };
+
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "unicorn"}};
+  _ok(f.ctx.send_records(sender, "sub-and-empty", {flt}, false),
+      "send_records succeeds when AND filter matches nothing");
+  _ok(replies.empty(), "AND filter with unmet value returns no events");
+
+  f.ctx.deinit();
+}
+
+static void test_and_tags_single_value_equivalent_to_or() {
+  auto f = make_and_tags_fixture();
+  std::vector<nlohmann::json> and_replies;
+  std::vector<nlohmann::json> or_replies;
+  auto and_sender = [&](const nlohmann::json& r) { and_replies.push_back(r); };
+  auto or_sender = [&](const nlohmann::json& r) { or_replies.push_back(r); };
+
+  filter_t and_flt;
+  and_flt.and_tags = {{"t", "meme"}};
+  filter_t or_flt;
+  or_flt.tags = {{"t", "meme"}};
+
+  _ok(f.ctx.send_records(and_sender, "sub-and-single", {and_flt}, false),
+      "send_records succeeds for single-value AND filter");
+  _ok(f.ctx.send_records(or_sender, "sub-or-single", {or_flt}, false),
+      "send_records succeeds for single-value OR filter");
+  _ok(and_replies.size() == or_replies.size(),
+      "single-value AND matches the same count as single-value OR");
+
+  f.ctx.deinit();
+}
+
+static void test_and_tags_or_semantics_unchanged() {
+  auto f = make_and_tags_fixture();
+  std::vector<nlohmann::json> replies;
+  auto sender = [&](const nlohmann::json& r) { replies.push_back(r); };
+
+  filter_t flt;
+  flt.tags = {{"t", "meme", "cat"}};
+  _ok(f.ctx.send_records(sender, "sub-or-multi", {flt}, false),
+      "send_records succeeds for OR tags filter");
+  _ok(replies.size() == 5,
+      "OR filter still returns every event having at least one value");
+
+  f.ctx.deinit();
+}
+
+static void test_and_tags_multiple_keys() {
+  auto f = make_and_tags_fixture();
+  auto alice =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  std::vector<nlohmann::json> replies;
+  auto sender = [&](const nlohmann::json& r) { replies.push_back(r); };
+
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}, {"p", alice}};
+  _ok(f.ctx.send_records(sender, "sub-and-multi-key", {flt}, false),
+      "send_records succeeds for AND filter with multiple tag names");
+  _ok(replies.size() == 1,
+      "AND across distinct tag names intersects correctly");
+  _ok(replies[0][2]["id"] == f.both_meme_cat.id,
+      "AND across distinct tag names returns the only event matching all");
+
+  f.ctx.deinit();
+}
+
+static void test_and_tags_combined_with_or() {
+  auto f = make_and_tags_fixture();
+  auto alice =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  std::vector<nlohmann::json> replies;
+  auto sender = [&](const nlohmann::json& r) { replies.push_back(r); };
+
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}};
+  flt.tags = {{"p", alice}};
+  _ok(f.ctx.send_records(sender, "sub-and-or", {flt}, false),
+      "send_records succeeds for AND combined with OR filter");
+  _ok(replies.size() == 1,
+      "AND combined with OR narrows to events satisfying both clauses");
+  _ok(replies[0][2]["id"] == f.both_meme_cat.id,
+      "AND+OR returns the alice meme+cat event");
+
+  f.ctx.deinit();
+}
+
+static void test_and_tags_count_query() {
+  auto f = make_and_tags_fixture();
+  std::vector<nlohmann::json> replies;
+  auto sender = [&](const nlohmann::json& r) { replies.push_back(r); };
+
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}};
+  _ok(f.ctx.send_records(sender, "sub-and-count", {flt}, true),
+      "send_records succeeds for COUNT with AND filter");
+  _ok(replies.size() == 1, "AND COUNT returns one COUNT message");
+  _ok(replies[0][0] == "COUNT", "AND COUNT message has COUNT verb");
+  _ok(replies[0][2]["count"] == 2,
+      "AND COUNT reflects events satisfying every value");
+
+  f.ctx.deinit();
+}
+
 static void test_delete_record_by_id_and_kind_and_ptag() {
   auto storage_ctx = init_test_storage();
   auto id = "event-ptag-1";
@@ -326,6 +495,171 @@ static void test_cagliostr_sign() {
   _ok(!check_event(ev), "check_event should be failed for invalid sig");
 }
 
+static event_t make_match_event() {
+  auto alice =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  return make_event(
+      "event-match-1", alice, 1700002000, 1,
+      {{"t", "meme"}, {"t", "cat"}, {"p", alice}, {"e", "deadbeef"}},
+      "Hello Nostr World");
+}
+
+static void test_matched_filters_empty_filter_matches_any() {
+  auto ev = make_match_event();
+  filter_t flt;
+  _ok(matched_filters({flt}, ev),
+      "empty filter matches any event");
+}
+
+static void test_matched_filters_id_author_kind() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.ids = {ev.id};
+  _ok(matched_filters({flt}, ev), "ids matches by event id");
+
+  flt = {};
+  flt.ids = {"nope"};
+  _ok(!matched_filters({flt}, ev), "ids excludes when id not listed");
+
+  flt = {};
+  flt.authors = {ev.pubkey};
+  _ok(matched_filters({flt}, ev), "authors matches by pubkey");
+
+  flt = {};
+  flt.authors = {"0000000000000000000000000000000000000000000000000000000000000000"};
+  _ok(!matched_filters({flt}, ev), "authors excludes other pubkey");
+
+  flt = {};
+  flt.kinds = {1};
+  _ok(matched_filters({flt}, ev), "kinds matches by kind");
+
+  flt = {};
+  flt.kinds = {2, 3};
+  _ok(!matched_filters({flt}, ev), "kinds excludes when kind not listed");
+}
+
+static void test_matched_filters_since_until() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.since = ev.created_at - 10;
+  flt.until = ev.created_at + 10;
+  _ok(matched_filters({flt}, ev), "since/until brackets matching event");
+
+  flt = {};
+  flt.since = ev.created_at + 1;
+  _ok(!matched_filters({flt}, ev), "since after created_at excludes event");
+
+  flt = {};
+  flt.until = ev.created_at - 1;
+  _ok(!matched_filters({flt}, ev), "until before created_at excludes event");
+}
+
+static void test_matched_filters_or_tags() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.tags = {{"t", "meme"}};
+  _ok(matched_filters({flt}, ev), "OR tag matches when value present");
+
+  flt = {};
+  flt.tags = {{"t", "missing", "cat"}};
+  _ok(matched_filters({flt}, ev),
+      "OR tag matches when any of multiple values is present");
+
+  flt = {};
+  flt.tags = {{"t", "missing"}};
+  _ok(!matched_filters({flt}, ev),
+      "OR tag rejects when none of the values is present");
+
+  flt = {};
+  flt.tags = {{"t", "meme"}, {"p", "missing"}};
+  _ok(!matched_filters({flt}, ev),
+      "OR tag clauses are conjoined across distinct keys");
+}
+
+static void test_matched_filters_and_tags_basic() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}};
+  _ok(matched_filters({flt}, ev),
+      "AND tag matches event carrying every requested value");
+
+  flt = {};
+  flt.and_tags = {{"t", "meme", "unicorn"}};
+  _ok(!matched_filters({flt}, ev),
+      "AND tag rejects when any requested value is missing");
+}
+
+static void test_matched_filters_and_tags_multiple_keys() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}, {"e", "deadbeef"}};
+  _ok(matched_filters({flt}, ev),
+      "AND tag intersects across distinct tag names");
+
+  flt = {};
+  flt.and_tags = {{"t", "meme", "cat"}, {"e", "missing"}};
+  _ok(!matched_filters({flt}, ev),
+      "AND tag rejects when one key clause fails");
+}
+
+static void test_matched_filters_and_tags_with_or() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}};
+  flt.tags = {{"p", ev.pubkey}};
+  _ok(matched_filters({flt}, ev),
+      "AND combined with OR matches when both clauses pass");
+
+  flt = {};
+  flt.and_tags = {{"t", "meme", "cat"}};
+  flt.tags = {{"p", "no-such-pubkey"}};
+  _ok(!matched_filters({flt}, ev),
+      "AND with failing OR clause rejects event");
+}
+
+static void test_matched_filters_and_tags_ignore_extra_tag_elements() {
+  auto alice =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  auto ev = make_event("event-match-extra", alice, 1700002001, 1,
+                       {{"e", "deadbeef", "wss://relay.example", "root"}},
+                       "with relay hint");
+  filter_t flt;
+  flt.and_tags = {{"e", "deadbeef"}};
+  _ok(matched_filters({flt}, ev),
+      "AND tag matches even when stored tag carries extra elements");
+}
+
+static void test_matched_filters_search() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.search = "Hello World";
+  _ok(matched_filters({flt}, ev),
+      "search matches when every word appears (case-insensitive)");
+
+  flt = {};
+  flt.search = "hello missing";
+  _ok(!matched_filters({flt}, ev),
+      "search rejects when any word is absent");
+
+  flt = {};
+  flt.search = "anything";
+  ev.content = "";
+  _ok(matched_filters({flt}, ev),
+      "search is bypassed when event content is empty");
+}
+
+static void test_matched_filters_multi_filter_or() {
+  auto ev = make_match_event();
+  filter_t miss;
+  miss.kinds = {99};
+  filter_t hit;
+  hit.kinds = {1};
+  _ok(matched_filters({miss, hit}, ev),
+      "any matching filter in the list yields true");
+  _ok(!matched_filters({miss, miss}, ev),
+      "no matching filter in the list yields false");
+}
+
 int main() {
   spdlog::set_level(spdlog::level::off);
 
@@ -333,10 +667,37 @@ int main() {
   subtest("test_event_json_roundtrip", test_event_json_roundtrip);
   subtest("test_get_event_by_id", test_get_event_by_id);
   subtest("test_send_records_filters", test_send_records_filters);
+  subtest("test_and_tags_basic_match", test_and_tags_basic_match);
+  subtest("test_and_tags_no_match", test_and_tags_no_match);
+  subtest("test_and_tags_single_value_equivalent_to_or",
+          test_and_tags_single_value_equivalent_to_or);
+  subtest("test_and_tags_or_semantics_unchanged",
+          test_and_tags_or_semantics_unchanged);
+  subtest("test_and_tags_multiple_keys", test_and_tags_multiple_keys);
+  subtest("test_and_tags_combined_with_or", test_and_tags_combined_with_or);
+  subtest("test_and_tags_count_query", test_and_tags_count_query);
   subtest("test_delete_record_by_id_and_kind_and_ptag",
           test_delete_record_by_id_and_kind_and_ptag);
   subtest("test_delete_all_events_by_pubkey", test_delete_all_events_by_pubkey);
   subtest("test_cagliostr_sign", test_cagliostr_sign);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
+  subtest("test_matched_filters_empty_filter_matches_any",
+          test_matched_filters_empty_filter_matches_any);
+  subtest("test_matched_filters_id_author_kind",
+          test_matched_filters_id_author_kind);
+  subtest("test_matched_filters_since_until",
+          test_matched_filters_since_until);
+  subtest("test_matched_filters_or_tags", test_matched_filters_or_tags);
+  subtest("test_matched_filters_and_tags_basic",
+          test_matched_filters_and_tags_basic);
+  subtest("test_matched_filters_and_tags_multiple_keys",
+          test_matched_filters_and_tags_multiple_keys);
+  subtest("test_matched_filters_and_tags_with_or",
+          test_matched_filters_and_tags_with_or);
+  subtest("test_matched_filters_and_tags_ignore_extra_tag_elements",
+          test_matched_filters_and_tags_ignore_extra_tag_elements);
+  subtest("test_matched_filters_search", test_matched_filters_search);
+  subtest("test_matched_filters_multi_filter_or",
+          test_matched_filters_multi_filter_or);
   return done_testing();
 }

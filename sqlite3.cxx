@@ -191,6 +191,20 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         conditions.push_back("(" + join(match, " OR ") + ")");
       }
     }
+    if (!filter.and_tags.empty()) {
+      for (const auto &tag : filter.and_tags) {
+        if (tag.size() < 2) {
+          continue;
+        }
+        const auto &first = tag[0];
+        for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
+          nlohmann::json data = {first, tag[i]};
+          params.push_back({.t = PARAM_TYPE_STRING,
+                            .s = "%" + escape_like(data.dump()) + "%"});
+          conditions.push_back(R"(tags LIKE ? ESCAPE '\')");
+        }
+      }
+    }
     if (filter.since != 0) {
       std::ostringstream os;
       os << filter.since;
