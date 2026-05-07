@@ -71,7 +71,9 @@ static auto nip11 = nlohmann::json{
                                   {"min_pow_difficulty", 0},
                                   {"auth_required", false},
                                   {"payment_required", false},
-                                  {"restricted_writes", false}}},
+                                  {"restricted_writes", false},
+                                  {"max_tags_and", 20},
+                                  {"max_tags_per_and", 20}}},
     {"fees", nlohmann::json::object()},
     {"relay_countries", nlohmann::json::array({"JP"})},
     {"icon",
@@ -310,6 +312,18 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
       tag.push_back(v.get<std::string>());
     }
     if (prefix == '&') {
+      const int max_per = nip11["limitation"]["max_tags_per_and"];
+      if (static_cast<int>(tag.size()) - 1 > max_per) {
+        console->warn("make_filter: AND tag {} exceeds max_tags_per_and ({})",
+                      it.key(), max_per);
+        return false;
+      }
+      const int max_and = nip11["limitation"]["max_tags_and"];
+      if (static_cast<int>(filter.and_tags.size()) >= max_and) {
+        console->warn("make_filter: too many AND tag clauses (max {})",
+                      max_and);
+        return false;
+      }
       filter.and_tags.push_back(std::move(tag));
     } else {
       filter.tags.push_back(std::move(tag));
