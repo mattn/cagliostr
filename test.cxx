@@ -566,6 +566,171 @@ static void test_created_at_within_limits() {
       "created_at_within_limits rejects beyond the lower limit");
 }
 
+static event_t make_match_event() {
+  auto alice =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  return make_event(
+      "event-match-1", alice, 1700002000, 1,
+      {{"t", "meme"}, {"t", "cat"}, {"p", alice}, {"e", "deadbeef"}},
+      "Hello Nostr World");
+}
+
+static void test_matched_filters_empty_filter_matches_any() {
+  auto ev = make_match_event();
+  filter_t flt;
+  _ok(matched_filters({flt}, ev),
+      "empty filter matches any event");
+}
+
+static void test_matched_filters_id_author_kind() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.ids = {ev.id};
+  _ok(matched_filters({flt}, ev), "ids matches by event id");
+
+  flt = {};
+  flt.ids = {"nope"};
+  _ok(!matched_filters({flt}, ev), "ids excludes when id not listed");
+
+  flt = {};
+  flt.authors = {ev.pubkey};
+  _ok(matched_filters({flt}, ev), "authors matches by pubkey");
+
+  flt = {};
+  flt.authors = {"0000000000000000000000000000000000000000000000000000000000000000"};
+  _ok(!matched_filters({flt}, ev), "authors excludes other pubkey");
+
+  flt = {};
+  flt.kinds = {1};
+  _ok(matched_filters({flt}, ev), "kinds matches by kind");
+
+  flt = {};
+  flt.kinds = {2, 3};
+  _ok(!matched_filters({flt}, ev), "kinds excludes when kind not listed");
+}
+
+static void test_matched_filters_since_until() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.since = ev.created_at - 10;
+  flt.until = ev.created_at + 10;
+  _ok(matched_filters({flt}, ev), "since/until brackets matching event");
+
+  flt = {};
+  flt.since = ev.created_at + 1;
+  _ok(!matched_filters({flt}, ev), "since after created_at excludes event");
+
+  flt = {};
+  flt.until = ev.created_at - 1;
+  _ok(!matched_filters({flt}, ev), "until before created_at excludes event");
+}
+
+static void test_matched_filters_or_tags() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.tags = {{"t", "meme"}};
+  _ok(matched_filters({flt}, ev), "OR tag matches when value present");
+
+  flt = {};
+  flt.tags = {{"t", "missing", "cat"}};
+  _ok(matched_filters({flt}, ev),
+      "OR tag matches when any of multiple values is present");
+
+  flt = {};
+  flt.tags = {{"t", "missing"}};
+  _ok(!matched_filters({flt}, ev),
+      "OR tag rejects when none of the values is present");
+
+  flt = {};
+  flt.tags = {{"t", "meme"}, {"p", "missing"}};
+  _ok(!matched_filters({flt}, ev),
+      "OR tag clauses are conjoined across distinct keys");
+}
+
+static void test_matched_filters_and_tags_basic() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}};
+  _ok(matched_filters({flt}, ev),
+      "AND tag matches event carrying every requested value");
+
+  flt = {};
+  flt.and_tags = {{"t", "meme", "unicorn"}};
+  _ok(!matched_filters({flt}, ev),
+      "AND tag rejects when any requested value is missing");
+}
+
+static void test_matched_filters_and_tags_multiple_keys() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}, {"e", "deadbeef"}};
+  _ok(matched_filters({flt}, ev),
+      "AND tag intersects across distinct tag names");
+
+  flt = {};
+  flt.and_tags = {{"t", "meme", "cat"}, {"e", "missing"}};
+  _ok(!matched_filters({flt}, ev),
+      "AND tag rejects when one key clause fails");
+}
+
+static void test_matched_filters_and_tags_with_or() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.and_tags = {{"t", "meme", "cat"}};
+  flt.tags = {{"p", ev.pubkey}};
+  _ok(matched_filters({flt}, ev),
+      "AND combined with OR matches when both clauses pass");
+
+  flt = {};
+  flt.and_tags = {{"t", "meme", "cat"}};
+  flt.tags = {{"p", "no-such-pubkey"}};
+  _ok(!matched_filters({flt}, ev),
+      "AND with failing OR clause rejects event");
+}
+
+static void test_matched_filters_and_tags_ignore_extra_tag_elements() {
+  auto alice =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  auto ev = make_event("event-match-extra", alice, 1700002001, 1,
+                       {{"e", "deadbeef", "wss://relay.example", "root"}},
+                       "with relay hint");
+  filter_t flt;
+  flt.and_tags = {{"e", "deadbeef"}};
+  _ok(matched_filters({flt}, ev),
+      "AND tag matches even when stored tag carries extra elements");
+}
+
+static void test_matched_filters_search() {
+  auto ev = make_match_event();
+  filter_t flt;
+  flt.search = "Hello World";
+  _ok(matched_filters({flt}, ev),
+      "search matches when every word appears (case-insensitive)");
+
+  flt = {};
+  flt.search = "hello missing";
+  _ok(!matched_filters({flt}, ev),
+      "search rejects when any word is absent");
+
+  flt = {};
+  flt.search = "anything";
+  ev.content = "";
+  _ok(matched_filters({flt}, ev),
+      "search is bypassed when event content is empty");
+}
+
+static void test_matched_filters_multi_filter_or() {
+  auto ev = make_match_event();
+  filter_t miss;
+  miss.kinds = {99};
+  filter_t hit;
+  hit.kinds = {1};
+  _ok(matched_filters({miss, hit}, ev),
+      "any matching filter in the list yields true");
+  _ok(!matched_filters({miss, miss}, ev),
+      "no matching filter in the list yields false");
+}
+
 int main() {
   spdlog::set_level(spdlog::level::off);
 
@@ -590,5 +755,23 @@ int main() {
   subtest("test_parse_a_coordinate", test_parse_a_coordinate);
   subtest("test_created_at_within_limits", test_created_at_within_limits);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
+  subtest("test_matched_filters_empty_filter_matches_any",
+          test_matched_filters_empty_filter_matches_any);
+  subtest("test_matched_filters_id_author_kind",
+          test_matched_filters_id_author_kind);
+  subtest("test_matched_filters_since_until",
+          test_matched_filters_since_until);
+  subtest("test_matched_filters_or_tags", test_matched_filters_or_tags);
+  subtest("test_matched_filters_and_tags_basic",
+          test_matched_filters_and_tags_basic);
+  subtest("test_matched_filters_and_tags_multiple_keys",
+          test_matched_filters_and_tags_multiple_keys);
+  subtest("test_matched_filters_and_tags_with_or",
+          test_matched_filters_and_tags_with_or);
+  subtest("test_matched_filters_and_tags_ignore_extra_tag_elements",
+          test_matched_filters_and_tags_ignore_extra_tag_elements);
+  subtest("test_matched_filters_search", test_matched_filters_search);
+  subtest("test_matched_filters_multi_filter_or",
+          test_matched_filters_multi_filter_or);
   return done_testing();
 }

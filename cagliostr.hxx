@@ -6,11 +6,14 @@
 #include <malloc.h>
 #endif
 
+#include <algorithm>
+#include <cctype>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <spdlog/common.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+#include <sstream>
 
 using event_t = struct event_t {
   std::string id;
@@ -125,6 +128,119 @@ inline bool created_at_within_limits(std::time_t created_at, std::time_t now,
     return false;
   }
   return true;
+}
+
+inline bool matched_filters(const std::vector<filter_t> &filters,
+                            const event_t &ev) {
+  auto found = false;
+  for (const auto &filter : filters) {
+    if (!filter.ids.empty()) {
+      const auto result =
+          std::find(filter.ids.begin(), filter.ids.end(), ev.id);
+      if (result == filter.ids.end()) {
+        continue;
+      }
+    }
+    if (!filter.authors.empty()) {
+      const auto result =
+          std::find(filter.authors.begin(), filter.authors.end(), ev.pubkey);
+      if (result == filter.authors.end()) {
+        continue;
+      }
+    }
+    if (!filter.kinds.empty()) {
+      const auto result =
+          std::find(filter.kinds.begin(), filter.kinds.end(), ev.kind);
+      if (result == filter.kinds.end()) {
+        continue;
+      }
+    }
+    if (filter.since > 0) {
+      if (filter.since > ev.created_at) {
+        continue;
+      }
+    }
+    if (filter.until > 0) {
+      if (ev.created_at > filter.until) {
+        continue;
+      }
+    }
+    if (!filter.tags.empty()) {
+      auto all_tags_matched = true;
+      for (const auto &filter_tag : filter.tags) {
+        if (filter_tag.size() < 2)
+          continue;
+        bool this_tag_matched = false;
+        for (const auto &tag : ev.tags) {
+          if (tag.size() < 2)
+            continue;
+          if (tag[0] != filter_tag[0])
+            continue;
+          for (size_t fi = 1; fi < filter_tag.size(); fi++) {
+            if (tag[1] == filter_tag[fi]) {
+              this_tag_matched = true;
+              break;
+            }
+          }
+          if (this_tag_matched)
+            break;
+        }
+        if (!this_tag_matched) {
+          all_tags_matched = false;
+          break;
+        }
+      }
+      if (!all_tags_matched) {
+        continue;
+      }
+    }
+    if (!filter.and_tags.empty()) {
+      auto all_and_tags_matched = true;
+      for (const auto &filter_tag : filter.and_tags) {
+        if (filter_tag.size() < 2)
+          continue;
+        const auto &key = filter_tag[0];
+        for (size_t fi = 1; fi < filter_tag.size(); fi++) {
+          bool found_value = false;
+          for (const auto &tag : ev.tags) {
+            if (tag.size() >= 2 && tag[0] == key && tag[1] == filter_tag[fi]) {
+              found_value = true;
+              break;
+            }
+          }
+          if (!found_value) {
+            all_and_tags_matched = false;
+            break;
+          }
+        }
+        if (!all_and_tags_matched)
+          break;
+      }
+      if (!all_and_tags_matched) {
+        continue;
+      }
+    }
+    if (!filter.search.empty()) {
+      auto found_search = true;
+      std::string content = ev.content;
+      std::transform(content.begin(), content.end(), content.begin(),
+                     ::tolower);
+      std::istringstream iss(filter.search);
+      std::string word;
+      while (iss >> word) {
+        std::transform(word.begin(), word.end(), word.begin(), ::tolower);
+        if (content.find(word) == std::string::npos) {
+          found_search = false;
+          break;
+        }
+      }
+      if (!found_search) {
+        continue;
+      }
+    }
+    found = true;
+  }
+  return found;
 }
 
 inline std::string escape_like(const std::string &data) {
