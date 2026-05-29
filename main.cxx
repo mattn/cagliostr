@@ -320,10 +320,11 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
 static void do_relay_req(WebSocket *ws, const nlohmann::json &data) {
   std::string sub = data[1];
 
-  // Check subscription limits
+  // Check subscription limits. A re-subscription with the same id replaces
+  // the existing one, so it must not count against the limit.
   int sub_count = 0;
   for (const auto &s : subscribers) {
-    if (s.ws == ws) {
+    if (s.ws == ws && s.sub != sub) {
       sub_count++;
     }
   }
