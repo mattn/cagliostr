@@ -487,7 +487,7 @@ static bool matched_filters(const std::vector<filter_t> &filters,
         continue;
       }
     }
-    if (!filter.search.empty() && !ev.content.empty()) {
+    if (!filter.search.empty()) {
       auto found_search = true;
       std::string content = ev.content;
       std::transform(content.begin(), content.end(), content.begin(),
