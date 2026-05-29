@@ -773,15 +773,30 @@ static std::string env(const char *name, const char *default_value) {
 
 static uWS::App *global_app = nullptr;
 
-static void signal_handler(int /*signum*/) {
-  console->warn("!! SIGINT");
-  std::lock_guard<std::mutex> lock(subscribers_mutex);
-  for (auto &s : subscribers) {
-    if (s.ws == nullptr) {
-      continue;
-    }
-    relay_notice(s.ws, "shutdown...");
+// Set from the signal handler and polled on the loop thread. Only
+// async-signal-safe operations are allowed in the handler itself, so it does
+// nothing but raise this flag; the actual shutdown runs in shutdown_poll().
+static volatile std::sig_atomic_t shutdown_requested = 0;
+
+static void signal_handler(int /*signum*/) { shutdown_requested = 1; }
+
+// Runs on the event-loop thread via a uSockets timer, so touching subscribers,
+// sending messages and closing the app are all safe here.
+static void shutdown_poll(struct us_timer_t *t) {
+  if (!shutdown_requested) {
+    return;
   }
+  console->warn("!! SIGINT");
+  {
+    std::lock_guard<std::mutex> lock(subscribers_mutex);
+    for (auto &s : subscribers) {
+      if (s.ws == nullptr) {
+        continue;
+      }
+      relay_notice(s.ws, "shutdown...");
+    }
+  }
+  us_timer_close(t);
   if (global_app) {
     global_app->close();
   }
@@ -962,8 +977,15 @@ static void server(short port) {
                 } else {
                   console->error("Failed to listen on port {}", port);
                 }
-              })
-      .run();
+              });
+
+  // Poll the shutdown flag on the loop thread so the signal handler itself
+  // only needs to do an async-signal-safe flag write.
+  struct us_timer_t *shutdown_timer =
+      us_create_timer((struct us_loop_t *)uWS::Loop::get(), 0, 0);
+  us_timer_set(shutdown_timer, shutdown_poll, 200, 200);
+
+  app.run();
 
   global_app = nullptr;
 }
