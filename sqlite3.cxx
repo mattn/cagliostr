@@ -47,7 +47,10 @@ static std::optional<event_t> get_event_by_id(const std::string &id) {
 
   sqlite3_bind_text(stmt, 1, id.data(), (int)id.size(), SQLITE_TRANSIENT);
   ret = sqlite3_step(stmt);
-  if (ret == SQLITE_DONE) {
+  if (ret != SQLITE_ROW) {
+    if (ret != SQLITE_DONE) {
+      console->error("{}", sqlite3_errmsg(conn));
+    }
     sqlite3_finalize(stmt);
     return std::nullopt;
   }
@@ -61,6 +64,7 @@ static std::optional<event_t> get_event_by_id(const std::string &id) {
   ej["tags"] = nlohmann::json::parse(j);
   ej["content"] = (char *)sqlite3_column_text(stmt, 5);
   ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
+  sqlite3_finalize(stmt);
   return ej;
 }
 
