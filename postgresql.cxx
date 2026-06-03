@@ -482,6 +482,7 @@ static void storage_init(const std::string &dsn) {
       CREATE INDEX IF NOT EXISTS kindidx ON event (kind);
       CREATE INDEX IF NOT EXISTS kindtimeidx ON event(kind,created_at DESC);
       CREATE INDEX IF NOT EXISTS arbitrarytagvalues ON event USING gin (tagvalues);
+      CREATE INDEX IF NOT EXISTS content_search_idx ON event USING gin (to_tsvector('simple', content)) WHERE length(content) <= 600;
     )");
     txn.commit();
   } catch (const std::exception &e) {
