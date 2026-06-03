@@ -1009,6 +1009,11 @@ int main(int argc, char *argv[]) {
         .help("log level")
         .metavar("LEVEL")
         .nargs(1);
+    program.add_argument("-relay-countries")
+        .default_value(env("RELAY_COUNTRIES", "JP"))
+        .help("comma-separated list of relay countries (ISO 3166-1)")
+        .metavar("COUNTRIES")
+        .nargs(1);
     program.add_argument("-port")
         .default_value(static_cast<short>(7447))
         .help("port number")
@@ -1042,6 +1047,23 @@ int main(int argc, char *argv[]) {
   }
 
   service_url = program.get<std::string>("-service-url");
+
+  {
+    auto countries = nlohmann::json::array();
+    const auto &spec = program.get<std::string>("-relay-countries");
+    std::stringstream ss(spec);
+    std::string country;
+    while (std::getline(ss, country, ',')) {
+      // trim surrounding whitespace
+      auto begin = country.find_first_not_of(" \t");
+      if (begin == std::string::npos) {
+        continue;
+      }
+      auto end = country.find_last_not_of(" \t");
+      countries.push_back(country.substr(begin, end - begin + 1));
+    }
+    nip11["relay_countries"] = std::move(countries);
+  }
 
   // Setup signal handler
   std::signal(SIGINT, signal_handler);
