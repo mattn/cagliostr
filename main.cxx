@@ -68,6 +68,7 @@ static auto nip11 = nlohmann::json{
                                   {"payment_required", false},
                                   {"restricted_writes", false}}},
     {"fees", nlohmann::json::object()},
+    {"relay_countries", nlohmann::json::array({"JP"})},
     {"icon",
      "https://raw.githubusercontent.com/mattn/cagliostr/main/cagliostr.png"}};
 
