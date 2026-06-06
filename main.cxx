@@ -53,7 +53,7 @@ static auto nip11 = nlohmann::json{
     {"contact", "mattn.jp@gmail.com"},
     {"supported_nips",
      nlohmann::json::array({1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 26, 28, 33, 40,
-                            42, 45, 50, 62, 70})},
+                            42, 45, 50, 62, 67, 70})},
     {"software", "https://github.com/mattn/cagliostr"},
     {"version", VERSION},
     {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024 * 5},
@@ -375,10 +375,13 @@ static void do_relay_req(WebSocket *ws, const nlohmann::json &data) {
 
   subscribers.push_back(subscriber_t{sub, ws, filters});
 
+  bool has_more = false;
   storage_ctx.send_records(
       [&](const nlohmann::json &_data) { relay_send(ws, _data); }, sub, filters,
-      false);
-  const auto reply = nlohmann::json::array({"EOSE", sub});
+      false, &has_more);
+  // NIP-67: hint whether all matching stored events have been sent.
+  const auto reply = nlohmann::json::array(
+      {"EOSE", sub, nlohmann::json::array({has_more ? "more" : "finish"})});
   relay_send(ws, reply);
 }
 
@@ -410,7 +413,7 @@ static void do_relay_count(WebSocket *ws, const nlohmann::json &data) {
 
   storage_ctx.send_records(
       [&](const nlohmann::json &_data) { relay_send(ws, _data); }, sub, filters,
-      true);
+      true, nullptr);
 }
 
 static void do_relay_close(WebSocket *ws, const nlohmann::json &data) {

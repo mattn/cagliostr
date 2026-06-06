@@ -165,7 +165,7 @@ static void test_send_records_filters() {
 
   filter_t by_id;
   by_id.ids = {ev1.id};
-  _ok(storage_ctx.send_records(sender, "sub-id", {by_id}, false),
+  _ok(storage_ctx.send_records(sender, "sub-id", {by_id}, false, nullptr),
       "send_records succeeds for id filter");
   _ok(replies.size() == 1, "send_records id filter returns one event");
   _ok(replies[0][0] == "EVENT", "send_records returns EVENT message");
@@ -176,7 +176,7 @@ static void test_send_records_filters() {
   filter_t by_author_kind;
   by_author_kind.authors = {pubkey2};
   by_author_kind.kinds = {2};
-  _ok(storage_ctx.send_records(sender, "sub-author-kind", {by_author_kind}, false),
+  _ok(storage_ctx.send_records(sender, "sub-author-kind", {by_author_kind}, false, nullptr),
       "send_records succeeds for author and kind filters");
   _ok(replies.size() == 1, "send_records author and kind filters return one event");
   _ok(replies[0][2]["id"] == ev2.id,
@@ -186,7 +186,7 @@ static void test_send_records_filters() {
   filter_t by_tag_search;
   by_tag_search.tags = {{"p", "friend-1"}};
   by_tag_search.search = "100%";
-  _ok(storage_ctx.send_records(sender, "sub-tag-search", {by_tag_search}, false),
+  _ok(storage_ctx.send_records(sender, "sub-tag-search", {by_tag_search}, false, nullptr),
       "send_records succeeds for tag and search filters");
   _ok(replies.size() == 1, "send_records tag and search filters return one event");
   _ok(replies[0][2]["id"] == ev1.id,
@@ -196,7 +196,7 @@ static void test_send_records_filters() {
   filter_t by_since_until;
   by_since_until.since = 1700000150;
   by_since_until.until = 1700000250;
-  _ok(storage_ctx.send_records(sender, "sub-time-range", {by_since_until}, false),
+  _ok(storage_ctx.send_records(sender, "sub-time-range", {by_since_until}, false, nullptr),
       "send_records succeeds for since/until filter");
   _ok(replies.size() == 1, "send_records since/until filter returns one event");
   _ok(replies[0][2]["id"] == ev2.id,
@@ -206,23 +206,38 @@ static void test_send_records_filters() {
   filter_t visible_only;
   visible_only.until = 1700000250;
   visible_only.limit = 2;
-  _ok(storage_ctx.send_records(sender, "sub-visible-limit", {visible_only}, false),
+  bool has_more = true;
+  _ok(storage_ctx.send_records(sender, "sub-visible-limit", {visible_only}, false, &has_more),
       "send_records succeeds for limit filter over visible rows");
   _ok(replies.size() == 2, "send_records respects limit for visible rows");
   _ok(replies[0][2]["id"] == ev2.id, "send_records orders visible rows by created_at desc");
   _ok(replies[1][2]["id"] == ev1.id, "send_records returns next visible row");
+  _ok(!has_more, "send_records reports finish when no more events remain");
+  replies.clear();
+
+  // NIP-67: when the limit is smaller than the number of matching events the
+  // relay must report that more events remain.
+  filter_t more_rows;
+  more_rows.until = 1700000250;
+  more_rows.limit = 1;
+  has_more = false;
+  _ok(storage_ctx.send_records(sender, "sub-more", {more_rows}, false, &has_more),
+      "send_records succeeds for limit filter with more events");
+  _ok(replies.size() == 1, "send_records honors the requested limit");
+  _ok(replies[0][2]["id"] == ev2.id, "send_records returns newest event first");
+  _ok(has_more, "send_records reports more when events remain beyond the limit");
   replies.clear();
 
   filter_t all_rows;
   all_rows.limit = 10;
-  _ok(storage_ctx.send_records(sender, "sub-expiration", {all_rows}, false),
+  _ok(storage_ctx.send_records(sender, "sub-expiration", {all_rows}, false, nullptr),
       "send_records succeeds when expired rows are present");
   _ok(replies.size() == 2, "send_records omits expired events from EVENT replies");
   _ok(replies[0][2]["id"] == ev2.id, "send_records still returns newest visible row");
   _ok(replies[1][2]["id"] == ev1.id, "send_records still returns older visible row");
   replies.clear();
 
-  _ok(storage_ctx.send_records(sender, "sub-count", {all_rows}, true),
+  _ok(storage_ctx.send_records(sender, "sub-count", {all_rows}, true, nullptr),
       "send_records succeeds for count");
   _ok(replies.size() == 1, "send_records count returns one message");
   _ok(replies[0][0] == "COUNT", "send_records count returns COUNT message");

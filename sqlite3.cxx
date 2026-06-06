@@ -119,8 +119,12 @@ static bool is_expired(std::vector<std::vector<std::string>> &tags) {
 
 static bool send_records(std::function<void(const nlohmann::json &)> sender,
                          const std::string &sub,
-                         const std::vector<filter_t> &filters, bool do_count) {
+                         const std::vector<filter_t> &filters, bool do_count,
+                         bool *has_more) {
   auto count = 0;
+  if (has_more != nullptr) {
+    *has_more = false;
+  }
   for (const auto &filter : filters) {
     std::string sql;
     if (do_count) {
@@ -241,7 +245,9 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     }
 
     if (!do_count) {
-      sqlite3_bind_int(stmt, params.size() + 1, limit);
+      // Fetch one extra row so we can tell whether more matching events exist
+      // beyond the requested limit (NIP-67 EOSE completeness hint).
+      sqlite3_bind_int(stmt, params.size() + 1, limit + 1);
     }
     if (do_count) {
       ret = sqlite3_step(stmt);
@@ -253,9 +259,17 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       count += sqlite3_column_int(stmt, 0);
       sqlite3_finalize(stmt);
     } else {
+      auto fetched = 0;
       while (true) {
         ret = sqlite3_step(stmt);
         if (ret == SQLITE_DONE) {
+          break;
+        }
+        if (++fetched > limit) {
+          // The extra row proves more matching events remain on the relay.
+          if (has_more != nullptr) {
+            *has_more = true;
+          }
           break;
         }
         nlohmann::json ej;

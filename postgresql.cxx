@@ -149,11 +149,15 @@ static std::string make_placeholders(size_t n, int &pno) {
 
 static bool send_records(std::function<void(const nlohmann::json &)> sender,
                          const std::string &sub,
-                         const std::vector<filter_t> &filters, bool do_count) {
+                         const std::vector<filter_t> &filters, bool do_count,
+                         bool *has_more) {
   if (!ensure_connection()) {
     return false;
   }
   auto count = 0;
+  if (has_more != nullptr) {
+    *has_more = false;
+  }
   for (const auto &filter : filters) {
     std::string sql;
     if (do_count) {
@@ -250,7 +254,9 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       sql += " WHERE " + join(conditions, " AND ");
     }
     if (!do_count) {
-      sql += " ORDER BY created_at DESC LIMIT " + std::to_string(limit);
+      // Fetch one extra row so we can tell whether more matching events exist
+      // beyond the requested limit (NIP-67 EOSE completeness hint).
+      sql += " ORDER BY created_at DESC LIMIT " + std::to_string(limit + 1);
     }
 
     pqxx::work txn(*conn);
@@ -260,7 +266,15 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     if (do_count) {
       count += r.one_field().as<int>();
     } else {
+      auto fetched = 0;
       for (const auto &row : r) {
+        if (++fetched > limit) {
+          // The extra row proves more matching events remain on the relay.
+          if (has_more != nullptr) {
+            *has_more = true;
+          }
+          break;
+        }
         nlohmann::json ej;
         ej["id"] = row["id"].c_str();
         ej["pubkey"] = row["pubkey"].c_str();

@@ -48,8 +48,8 @@ using storage_context_t = struct storage_context_t {
       const std::string &, int, const std::vector<std::string> &);
   int (*delete_all_events_by_pubkey)(const std::string &, std::time_t);
   bool (*send_records)(std::function<void(const nlohmann::json &)>,
-                       const std::string &, const std::vector<filter_t> &,
-                       bool);
+                       const std::string &, const std::vector<filter_t> &, bool,
+                       bool *);
 };
 
 void storage_context_init_sqlite3(storage_context_t &);
