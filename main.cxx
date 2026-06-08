@@ -111,6 +111,31 @@ globalThis.addEventListener('DOMContentLoaded', () => {
 </body>
 </html>)";
 
+// Extract the real client IP from proxy headers (e.g. Cloudflare Tunnel /
+// reverse proxy). Falls back to an empty string when no header is present.
+static std::string extract_forwarded_ip(uWS::HttpRequest *req) {
+  for (const char *name :
+       {"cf-connecting-ip", "x-forwarded-for", "x-real-ip"}) {
+    std::string_view value = req->getHeader(name);
+    if (value.empty()) {
+      continue;
+    }
+    // X-Forwarded-For may be a comma separated list; take the first entry.
+    auto comma = value.find(',');
+    if (comma != std::string_view::npos) {
+      value = value.substr(0, comma);
+    }
+    // Trim surrounding whitespace.
+    auto begin = value.find_first_not_of(" \t");
+    auto end = value.find_last_not_of(" \t");
+    if (begin == std::string_view::npos) {
+      continue;
+    }
+    return std::string(value.substr(begin, end - begin + 1));
+  }
+  return "";
+}
+
 static const std::string realIP(WebSocket *ws) {
   auto *data = ws->getUserData();
   if (data && !data->ip.empty()) {
@@ -808,7 +833,10 @@ static void shutdown_poll(struct us_timer_t *t) {
 
 static void ws_open_handler(WebSocket *ws) {
   auto *data = ws->getUserData();
-  data->ip = std::string(ws->getRemoteAddressAsText());
+  // data->ip may already be set from a proxy header during upgrade.
+  if (data->ip.empty()) {
+    data->ip = std::string(ws->getRemoteAddressAsText());
+  }
   data->challenge = generate_random_hex_16();
   data->pubkey = "";
 
@@ -965,7 +993,16 @@ static void server(short port) {
           .sendPingsAutomatically = true,
 
           /* Handlers */
-          .upgrade = nullptr,
+          .upgrade =
+              [](auto *res, auto *req, auto *context) {
+                res->template upgrade<PerSocketData>(
+                    PerSocketData{.ip = extract_forwarded_ip(req),
+                                  .challenge = "",
+                                  .pubkey = ""},
+                    req->getHeader("sec-websocket-key"),
+                    req->getHeader("sec-websocket-protocol"),
+                    req->getHeader("sec-websocket-extensions"), context);
+              },
           .open = ws_open_handler,
           .message = ws_message_handler,
           .drain = ws_drain_handler,
