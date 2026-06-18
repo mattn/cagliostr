@@ -292,7 +292,7 @@ static void test_and_tags_basic_match() {
 
   filter_t flt;
   flt.and_tags = {{"t", "meme", "cat"}};
-  _ok(f.ctx.send_records(sender, "sub-and-basic", {flt}, false),
+  _ok(f.ctx.send_records(sender, "sub-and-basic", {flt}, false, nullptr),
       "send_records succeeds for AND filter");
   _ok(replies.size() == 2,
       "AND filter returns only events carrying every requested value");
@@ -316,7 +316,7 @@ static void test_and_tags_no_match() {
 
   filter_t flt;
   flt.and_tags = {{"t", "meme", "unicorn"}};
-  _ok(f.ctx.send_records(sender, "sub-and-empty", {flt}, false),
+  _ok(f.ctx.send_records(sender, "sub-and-empty", {flt}, false, nullptr),
       "send_records succeeds when AND filter matches nothing");
   _ok(replies.empty(), "AND filter with unmet value returns no events");
 
@@ -335,9 +335,9 @@ static void test_and_tags_single_value_equivalent_to_or() {
   filter_t or_flt;
   or_flt.tags = {{"t", "meme"}};
 
-  _ok(f.ctx.send_records(and_sender, "sub-and-single", {and_flt}, false),
+  _ok(f.ctx.send_records(and_sender, "sub-and-single", {and_flt}, false, nullptr),
       "send_records succeeds for single-value AND filter");
-  _ok(f.ctx.send_records(or_sender, "sub-or-single", {or_flt}, false),
+  _ok(f.ctx.send_records(or_sender, "sub-or-single", {or_flt}, false, nullptr),
       "send_records succeeds for single-value OR filter");
   _ok(and_replies.size() == or_replies.size(),
       "single-value AND matches the same count as single-value OR");
@@ -352,7 +352,7 @@ static void test_and_tags_or_semantics_unchanged() {
 
   filter_t flt;
   flt.tags = {{"t", "meme", "cat"}};
-  _ok(f.ctx.send_records(sender, "sub-or-multi", {flt}, false),
+  _ok(f.ctx.send_records(sender, "sub-or-multi", {flt}, false, nullptr),
       "send_records succeeds for OR tags filter");
   _ok(replies.size() == 5,
       "OR filter still returns every event having at least one value");
@@ -369,7 +369,7 @@ static void test_and_tags_multiple_keys() {
 
   filter_t flt;
   flt.and_tags = {{"t", "meme", "cat"}, {"p", alice}};
-  _ok(f.ctx.send_records(sender, "sub-and-multi-key", {flt}, false),
+  _ok(f.ctx.send_records(sender, "sub-and-multi-key", {flt}, false, nullptr),
       "send_records succeeds for AND filter with multiple tag names");
   _ok(replies.size() == 1,
       "AND across distinct tag names intersects correctly");
@@ -389,7 +389,7 @@ static void test_and_tags_combined_with_or() {
   filter_t flt;
   flt.and_tags = {{"t", "meme", "cat"}};
   flt.tags = {{"p", alice}};
-  _ok(f.ctx.send_records(sender, "sub-and-or", {flt}, false),
+  _ok(f.ctx.send_records(sender, "sub-and-or", {flt}, false, nullptr),
       "send_records succeeds for AND combined with OR filter");
   _ok(replies.size() == 1,
       "AND combined with OR narrows to events satisfying both clauses");
@@ -406,7 +406,7 @@ static void test_and_tags_count_query() {
 
   filter_t flt;
   flt.and_tags = {{"t", "meme", "cat"}};
-  _ok(f.ctx.send_records(sender, "sub-and-count", {flt}, true),
+  _ok(f.ctx.send_records(sender, "sub-and-count", {flt}, true, nullptr),
       "send_records succeeds for COUNT with AND filter");
   _ok(replies.size() == 1, "AND COUNT returns one COUNT message");
   _ok(replies[0][0] == "COUNT", "AND COUNT message has COUNT verb");
@@ -715,8 +715,8 @@ static void test_matched_filters_search() {
   flt = {};
   flt.search = "anything";
   ev.content = "";
-  _ok(matched_filters({flt}, ev),
-      "search is bypassed when event content is empty");
+  _ok(!matched_filters({flt}, ev),
+      "search fails when event content is empty");
 }
 
 static void test_matched_filters_multi_filter_or() {
