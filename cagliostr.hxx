@@ -79,6 +79,39 @@ inline void from_json(const nlohmann::json &j, event_t &e) {
   j.at("sig").get_to(e.sig);
 }
 
+// NIP-09: parse an addressable event coordinate ("kind:pubkey:dtag") from an
+// "a" tag value. Returns false when the value is malformed.
+inline bool parse_a_coordinate(const std::string &coordinate, int &kind,
+                               std::string &pubkey, std::string &dtag) {
+  auto first = coordinate.find(':');
+  if (first == std::string::npos) {
+    return false;
+  }
+  auto second = coordinate.find(':', first + 1);
+  if (second == std::string::npos) {
+    return false;
+  }
+  const auto kind_str = coordinate.substr(0, first);
+  if (kind_str.empty()) {
+    return false;
+  }
+  try {
+    size_t pos = 0;
+    kind = std::stoi(kind_str, &pos);
+    if (pos != kind_str.size()) {
+      return false;
+    }
+  } catch (const std::exception &) {
+    return false;
+  }
+  pubkey = coordinate.substr(first + 1, second - first - 1);
+  dtag = coordinate.substr(second + 1);
+  if (pubkey.empty()) {
+    return false;
+  }
+  return true;
+}
+
 inline std::string escape_like(const std::string &data) {
   std::string result;
   for (const auto c : data) {

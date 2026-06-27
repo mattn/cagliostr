@@ -614,6 +614,19 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
               }
             }
           }
+        } else if (tag.size() >= 2 && tag[0] == "a") {
+          // NIP-09: delete addressable events referenced by coordinate.
+          int kind = 0;
+          std::string pubkey, dtag;
+          if (parse_a_coordinate(tag[1], kind, pubkey, dtag) &&
+              pubkey == ev.pubkey) {
+            std::vector<std::string> dtag_pair = {"d", dtag};
+            auto r = storage_ctx.delete_record_by_kind_and_pubkey_and_dtag(
+                kind, ev.pubkey, dtag_pair, ev.created_at + 1);
+            if (r < 0) {
+              delete_failed = true;
+            }
+          }
         }
       }
 

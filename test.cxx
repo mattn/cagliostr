@@ -352,6 +352,30 @@ static void test_count_leading_zero_bits() {
   _ok(count_leading_zero_bits("") == 0, "empty id has no leading zeros");
 }
 
+static void test_parse_a_coordinate() {
+  int kind = 0;
+  std::string pubkey, dtag;
+
+  _ok(parse_a_coordinate("30023:abcd:my-article", kind, pubkey, dtag),
+      "parse_a_coordinate accepts a valid coordinate");
+  _ok(kind == 30023, "parse_a_coordinate extracts kind");
+  _ok(pubkey == "abcd", "parse_a_coordinate extracts pubkey");
+  _ok(dtag == "my-article", "parse_a_coordinate extracts dtag");
+
+  _ok(parse_a_coordinate("30000:abcd:", kind, pubkey, dtag),
+      "parse_a_coordinate accepts an empty dtag");
+  _ok(dtag == "", "parse_a_coordinate keeps empty dtag");
+
+  _ok(!parse_a_coordinate("30023:abcd", kind, pubkey, dtag),
+      "parse_a_coordinate rejects a missing dtag separator");
+  _ok(!parse_a_coordinate("abc:abcd:x", kind, pubkey, dtag),
+      "parse_a_coordinate rejects a non-numeric kind");
+  _ok(!parse_a_coordinate("30023::x", kind, pubkey, dtag),
+      "parse_a_coordinate rejects an empty pubkey");
+  _ok(!parse_a_coordinate("", kind, pubkey, dtag),
+      "parse_a_coordinate rejects an empty value");
+}
+
 int main() {
   spdlog::set_level(spdlog::level::off);
 
@@ -364,6 +388,7 @@ int main() {
   subtest("test_delete_all_events_by_pubkey", test_delete_all_events_by_pubkey);
   subtest("test_cagliostr_sign", test_cagliostr_sign);
   subtest("test_count_leading_zero_bits", test_count_leading_zero_bits);
+  subtest("test_parse_a_coordinate", test_parse_a_coordinate);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
   return done_testing();
 }
