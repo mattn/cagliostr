@@ -376,6 +376,27 @@ static void test_parse_a_coordinate() {
       "parse_a_coordinate rejects an empty value");
 }
 
+static void test_created_at_within_limits() {
+  std::time_t now = 1700000000;
+
+  _ok(created_at_within_limits(now, now, 0, 0),
+      "created_at_within_limits accepts everything when disabled");
+  _ok(created_at_within_limits(now - 100000, now, 0, 0),
+      "created_at_within_limits ignores old events when lower limit disabled");
+  _ok(created_at_within_limits(now + 100000, now, 0, 0),
+      "created_at_within_limits ignores future events when upper limit disabled");
+
+  _ok(created_at_within_limits(now + 900, now, 0, 900),
+      "created_at_within_limits accepts the upper boundary");
+  _ok(!created_at_within_limits(now + 901, now, 0, 900),
+      "created_at_within_limits rejects beyond the upper limit");
+
+  _ok(created_at_within_limits(now - 3600, now, 3600, 900),
+      "created_at_within_limits accepts the lower boundary");
+  _ok(!created_at_within_limits(now - 3601, now, 3600, 900),
+      "created_at_within_limits rejects beyond the lower limit");
+}
+
 int main() {
   spdlog::set_level(spdlog::level::off);
 
@@ -389,6 +410,7 @@ int main() {
   subtest("test_cagliostr_sign", test_cagliostr_sign);
   subtest("test_count_leading_zero_bits", test_count_leading_zero_bits);
   subtest("test_parse_a_coordinate", test_parse_a_coordinate);
+  subtest("test_created_at_within_limits", test_created_at_within_limits);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
   return done_testing();
 }
