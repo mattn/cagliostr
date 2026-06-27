@@ -341,6 +341,17 @@ static void test_cagliostr_sign() {
   _ok(!check_event(ev), "check_event should be failed for invalid sig");
 }
 
+static void test_count_leading_zero_bits() {
+  _ok(count_leading_zero_bits("ffff") == 0, "no leading zero bits");
+  _ok(count_leading_zero_bits("7fff") == 1, "one leading zero bit");
+  _ok(count_leading_zero_bits("0fff") == 4, "one zero nibble");
+  _ok(count_leading_zero_bits("00ff") == 8, "two zero nibbles");
+  _ok(count_leading_zero_bits("002f") == 10, "two zero nibbles plus two bits");
+  _ok(count_leading_zero_bits("000000000e9d897a3aa5f...") == 36,
+      "leading zeros stop at first set bit");
+  _ok(count_leading_zero_bits("") == 0, "empty id has no leading zeros");
+}
+
 int main() {
   spdlog::set_level(spdlog::level::off);
 
@@ -352,6 +363,7 @@ int main() {
           test_delete_record_by_id_and_kind_and_ptag);
   subtest("test_delete_all_events_by_pubkey", test_delete_all_events_by_pubkey);
   subtest("test_cagliostr_sign", test_cagliostr_sign);
+  subtest("test_count_leading_zero_bits", test_count_leading_zero_bits);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
   return done_testing();
 }

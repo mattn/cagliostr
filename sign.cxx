@@ -123,6 +123,29 @@ static bool check_delegation(const event_t &ev,
                           delegation_digest);
 }
 
+int count_leading_zero_bits(const std::string &hex) {
+  int count = 0;
+  for (const auto c : hex) {
+    auto nibble = hex_value(c);
+    if (nibble < 0) {
+      break;
+    }
+    if (nibble == 0) {
+      count += 4;
+      continue;
+    }
+    if (nibble <= 1) {
+      count += 3;
+    } else if (nibble <= 3) {
+      count += 2;
+    } else if (nibble <= 7) {
+      count += 1;
+    }
+    break;
+  }
+  return count;
+}
+
 bool check_event(const event_t &ev) {
   nlohmann::json check = nlohmann::json::array({
       0,
