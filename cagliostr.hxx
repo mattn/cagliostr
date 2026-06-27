@@ -57,6 +57,9 @@ void storage_context_init_postgresql(storage_context_t &);
 
 bool check_event(const event_t &);
 
+// NIP-13: count the number of leading zero bits in a hex-encoded event id.
+int count_leading_zero_bits(const std::string &);
+
 inline void to_json(nlohmann::json &j, const event_t &e) {
   j = nlohmann::json{
       {"id", e.id},           {"pubkey", e.pubkey},

@@ -52,8 +52,8 @@ static auto nip11 = nlohmann::json{
      "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc"},
     {"contact", "mattn.jp@gmail.com"},
     {"supported_nips",
-     nlohmann::json::array({1, 2, 4, 9, 11, 12, 15, 16, 20, 22, 26, 28, 33, 40,
-                            42, 45, 50, 62, 67, 70})},
+     nlohmann::json::array({1, 2, 4, 9, 11, 12, 13, 15, 16, 20, 22, 26, 28, 33,
+                            40, 42, 45, 50, 62, 67, 70})},
     {"software", "https://github.com/mattn/cagliostr"},
     {"version", VERSION},
     {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024 * 5},
@@ -63,7 +63,7 @@ static auto nip11 = nlohmann::json{
                                   {"max_subid_length", 100},
                                   {"max_event_tags", 100},
                                   {"max_content_length", 16384},
-                                  {"min_pow_difficulty", 30},
+                                  {"min_pow_difficulty", 0},
                                   {"auth_required", false},
                                   {"payment_required", false},
                                   {"restricted_writes", false}}},
@@ -561,6 +561,20 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       return;
     }
 
+    // NIP-13: enforce proof of work when a minimum difficulty is required.
+    int min_pow = nip11["limitation"]["min_pow_difficulty"];
+    if (min_pow > 0) {
+      int pow = count_leading_zero_bits(ev.id);
+      if (pow < min_pow) {
+        const auto reply = nlohmann::json::array(
+            {"OK", ev.id, false,
+             "pow: difficulty " + std::to_string(pow) + " is less than " +
+                 std::to_string(min_pow)});
+        relay_send(ws, reply);
+        return;
+      }
+    }
+
     for (const auto &tag : ev.tags) {
       if (tag.size() == 1 && tag[0] == "-") {
         if (!check_auth_pubkey(ws, ev.pubkey)) {
@@ -1054,6 +1068,12 @@ int main(int argc, char *argv[]) {
         .help("comma-separated list of relay countries (ISO 3166-1)")
         .metavar("COUNTRIES")
         .nargs(1);
+    program.add_argument("-min-pow")
+        .default_value(static_cast<int>(std::stoi(env("MIN_POW_DIFFICULTY", "0"))))
+        .help("minimum proof of work difficulty required for events (NIP-13)")
+        .metavar("BITS")
+        .scan<'i', int>()
+        .nargs(1);
     program.add_argument("-port")
         .default_value(static_cast<short>(7447))
         .help("port number")
@@ -1104,6 +1124,8 @@ int main(int argc, char *argv[]) {
     }
     nip11["relay_countries"] = std::move(countries);
   }
+
+  nip11["limitation"]["min_pow_difficulty"] = program.get<int>("-min-pow");
 
   // Setup signal handler
   std::signal(SIGINT, signal_handler);
