@@ -43,6 +43,11 @@ static std::vector<subscriber_t> subscribers;
 
 static std::string service_url;
 
+// NIP-22: accepted created_at window, in seconds relative to the current time.
+// A value of 0 disables that side of the check.
+static std::time_t created_at_lower_limit = 0;
+static std::time_t created_at_upper_limit = 900;
+
 static storage_context_t storage_ctx;
 
 static auto nip11 = nlohmann::json{
@@ -556,6 +561,17 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       return;
     }
 
+    // NIP-22: reject events whose created_at is outside the accepted window.
+    if (!created_at_within_limits(ev.created_at, std::time(nullptr),
+                                  created_at_lower_limit,
+                                  created_at_upper_limit)) {
+      const auto reply = nlohmann::json::array(
+          {"OK", ev.id, false,
+           "invalid: created_at is out of the acceptable range"});
+      relay_send(ws, reply);
+      return;
+    }
+
     if (!check_event(ev)) {
       relay_notice(ws, ev.id, "error: invalid id or signature");
       return;
@@ -974,7 +990,16 @@ static void http_get_handler(uWS::HttpResponse<false> *res,
 
   if (accept.find("application/nostr+json") != std::string::npos) {
     res->writeHeader("Content-Type", "application/nostr+json");
-    res->end(nip11.dump());
+    // NIP-22: advertise the accepted created_at window as absolute timestamps.
+    auto doc = nip11;
+    auto now = std::time(nullptr);
+    if (created_at_lower_limit > 0) {
+      doc["limitation"]["created_at_lower_limit"] = now - created_at_lower_limit;
+    }
+    if (created_at_upper_limit > 0) {
+      doc["limitation"]["created_at_upper_limit"] = now + created_at_upper_limit;
+    }
+    res->end(doc.dump());
   } else {
     res->writeHeader("Content-Type", "text/html; charset=UTF-8");
     res->end(html);
@@ -1087,6 +1112,21 @@ int main(int argc, char *argv[]) {
         .metavar("BITS")
         .scan<'i', int>()
         .nargs(1);
+    program.add_argument("-created-at-lower-limit")
+        .default_value(
+            static_cast<int>(std::stoi(env("CREATED_AT_LOWER_LIMIT", "0"))))
+        .help("reject events older than this many seconds (NIP-22, 0 disables)")
+        .metavar("SECONDS")
+        .scan<'i', int>()
+        .nargs(1);
+    program.add_argument("-created-at-upper-limit")
+        .default_value(
+            static_cast<int>(std::stoi(env("CREATED_AT_UPPER_LIMIT", "900"))))
+        .help("reject events further than this many seconds in the future "
+              "(NIP-22, 0 disables)")
+        .metavar("SECONDS")
+        .scan<'i', int>()
+        .nargs(1);
     program.add_argument("-port")
         .default_value(static_cast<short>(7447))
         .help("port number")
@@ -1139,6 +1179,9 @@ int main(int argc, char *argv[]) {
   }
 
   nip11["limitation"]["min_pow_difficulty"] = program.get<int>("-min-pow");
+
+  created_at_lower_limit = program.get<int>("-created-at-lower-limit");
+  created_at_upper_limit = program.get<int>("-created-at-upper-limit");
 
   // Setup signal handler
   std::signal(SIGINT, signal_handler);

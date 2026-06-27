@@ -112,6 +112,20 @@ inline bool parse_a_coordinate(const std::string &coordinate, int &kind,
   return true;
 }
 
+// NIP-22: report whether created_at falls within the accepted window relative
+// to the current time. A limit of 0 disables that side of the check.
+inline bool created_at_within_limits(std::time_t created_at, std::time_t now,
+                                     std::time_t lower_limit,
+                                     std::time_t upper_limit) {
+  if (lower_limit > 0 && created_at < now - lower_limit) {
+    return false;
+  }
+  if (upper_limit > 0 && created_at > now + upper_limit) {
+    return false;
+  }
+  return true;
+}
+
 inline std::string escape_like(const std::string &data) {
   std::string result;
   for (const auto c : data) {
