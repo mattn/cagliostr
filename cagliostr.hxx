@@ -6,6 +6,10 @@
 #include <malloc.h>
 #endif
 
+#include <ctime>
+#include <list>
+#include <unordered_map>
+
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <spdlog/common.h>
@@ -125,6 +129,65 @@ inline bool created_at_within_limits(std::time_t created_at, std::time_t now,
   }
   return true;
 }
+
+// Fixed-window rate limiter keyed by an arbitrary string (an IP address or a
+// pubkey). State is held in an LRU cache bounded by max_keys so that a flood of
+// unique keys cannot grow memory without limit; the least-recently-used key,
+// whose window is also the most stale, is evicted first. A limit or window of 0
+// disables the limiter and allows everything.
+class rate_limiter_t {
+public:
+  void configure(int limit, std::time_t window,
+                 std::size_t max_keys = 100000) {
+    limit_ = limit;
+    window_ = window;
+    max_keys_ = max_keys;
+  }
+
+  bool enabled() const { return limit_ > 0 && window_ > 0; }
+
+  // Record a hit for the given key at time `now` and report whether it is
+  // within the limit. When disabled, everything is allowed.
+  bool allow(const std::string &key, std::time_t now) {
+    if (!enabled()) {
+      return true;
+    }
+    auto it = entries_.find(key);
+    if (it == entries_.end()) {
+      if (max_keys_ > 0 && entries_.size() >= max_keys_) {
+        entries_.erase(lru_.back());
+        lru_.pop_back();
+      }
+      lru_.push_front(key);
+      it = entries_.emplace(key, entry_t{lru_.begin(), now, 0}).first;
+    } else {
+      // Touch: move this key to the most-recently-used end.
+      lru_.splice(lru_.begin(), lru_, it->second.pos);
+    }
+    auto &e = it->second;
+    if (now - e.start >= window_) {
+      e.start = now;
+      e.count = 0;
+    }
+    e.count++;
+    return e.count <= limit_;
+  }
+
+  std::size_t size() const { return entries_.size(); }
+
+private:
+  struct entry_t {
+    std::list<std::string>::iterator pos;
+    std::time_t start;
+    int count;
+  };
+
+  int limit_{0};
+  std::time_t window_{0};
+  std::size_t max_keys_{0};
+  std::list<std::string> lru_;
+  std::unordered_map<std::string, entry_t> entries_;
+};
 
 inline std::string escape_like(const std::string &data) {
   std::string result;
