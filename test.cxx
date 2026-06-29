@@ -397,6 +397,42 @@ static void test_created_at_within_limits() {
       "created_at_within_limits rejects beyond the lower limit");
 }
 
+static void test_rate_limiter() {
+  std::time_t now = 1700000000;
+
+  // Disabled limiter allows everything.
+  rate_limiter_t disabled;
+  _ok(disabled.allow("a", now), "disabled limiter allows the first hit");
+  for (int i = 0; i < 1000; i++) {
+    disabled.allow("a", now);
+  }
+  _ok(disabled.allow("a", now), "disabled limiter never throttles");
+
+  // Allow up to `limit` hits per window, reject the next.
+  rate_limiter_t rl;
+  rl.configure(3, 60);
+  _ok(rl.allow("a", now), "first hit within limit");
+  _ok(rl.allow("a", now), "second hit within limit");
+  _ok(rl.allow("a", now), "third hit within limit");
+  _ok(!rl.allow("a", now), "fourth hit exceeds the limit");
+
+  // A different key has its own independent counter.
+  _ok(rl.allow("b", now), "other key is tracked independently");
+
+  // The counter resets once the window elapses.
+  _ok(rl.allow("a", now + 60), "counter resets after the window");
+
+  // The LRU cache stays bounded by max_keys.
+  rate_limiter_t bounded;
+  bounded.configure(1, 60, 2);
+  bounded.allow("k1", now);
+  bounded.allow("k2", now);
+  bounded.allow("k3", now);
+  _ok(bounded.size() == 2, "LRU cache never exceeds max_keys");
+  // k1 was evicted, so it gets a fresh window.
+  _ok(bounded.allow("k1", now), "evicted key starts a fresh window");
+}
+
 int main() {
   spdlog::set_level(spdlog::level::off);
 
@@ -411,6 +447,7 @@ int main() {
   subtest("test_count_leading_zero_bits", test_count_leading_zero_bits);
   subtest("test_parse_a_coordinate", test_parse_a_coordinate);
   subtest("test_created_at_within_limits", test_created_at_within_limits);
+  subtest("test_rate_limiter", test_rate_limiter);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
   return done_testing();
 }
