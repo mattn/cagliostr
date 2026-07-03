@@ -76,32 +76,43 @@ static bool check_delegation(const event_t &ev,
                              const std::string &conditions,
                              const std::string &delegation_sig) {
   if (!conditions.empty()) {
+    // NIP-26: conditions are AND-combined, except that multiple conditions
+    // on the same field enumerate the permitted values (e.g. "kind=0&kind=1"
+    // permits kind 0 or 1).
+    bool has_kind_condition = false;
+    bool kind_matched = false;
     std::istringstream iss(conditions);
     std::string condition;
     while (std::getline(iss, condition, '&')) {
-      auto eq_pos = condition.find('=');
-      if (eq_pos == std::string::npos)
+      auto op_pos = condition.find_first_of("=<>");
+      if (op_pos == std::string::npos)
         continue;
 
-      auto key = condition.substr(0, eq_pos);
-      auto value = condition.substr(eq_pos + 1);
+      auto key = condition.substr(0, op_pos);
+      auto op = condition[op_pos];
+      auto value = condition.substr(op_pos + 1);
 
-      if (key == "kind") {
-        if (std::to_string(ev.kind) != value) {
+      if (key == "kind" && op == '=') {
+        has_kind_condition = true;
+        if (std::to_string(ev.kind) == value) {
+          kind_matched = true;
+        }
+      } else if (key == "created_at" && (op == '<' || op == '>')) {
+        long long timestamp = 0;
+        try {
+          timestamp = std::stoll(value);
+        } catch (const std::exception &) {
           return false;
         }
-      } else if (key == "created_at") {
-        auto op_pos = value.find_first_of("<>");
-        if (op_pos != std::string::npos) {
-          char op = value[op_pos];
-          auto timestamp = std::stoll(value.substr(op_pos + 1));
-          if (op == '<' && ev.created_at >= timestamp) {
-            return false;
-          } else if (op == '>' && ev.created_at <= timestamp) {
-            return false;
-          }
+        if (op == '<' && ev.created_at >= timestamp) {
+          return false;
+        } else if (op == '>' && ev.created_at <= timestamp) {
+          return false;
         }
       }
+    }
+    if (has_kind_condition && !kind_matched) {
+      return false;
     }
   }
 

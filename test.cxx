@@ -341,6 +341,37 @@ static void test_cagliostr_sign() {
   _ok(!check_event(ev), "check_event should be failed for invalid sig");
 }
 
+static void test_cagliostr_delegation() {
+  // NIP-26 delegated events. All fixtures are signed by the delegatee
+  // (477318cf) and carry a delegation tag from the delegator (8e0d3d3e)
+  // with conditions "kind=1&kind=6&kind=7&created_at>1674834236&created_at<1677426236".
+  event_t ev;
+
+  ev = string2event(
+      R"({"kind":1,"id":"3f2f27313552a0e3901ca925a48a3aefdab5f4361d69b00a08ce0d5636ad6b9a","pubkey":"477318cfb5427b9cfc66a9fa376150c1ddbc62115ae27cef72417eb959691396","created_at":1675000000,"tags":[["delegation","8e0d3d3eb2881ec137a11debe736a9086715a8c8beeeda615780064d68bc25dd","kind=1&kind=6&kind=7&created_at>1674834236&created_at<1677426236","b7557acbbfbe2f4d0ffe84ebf39f3e6ec94c97255a1800a2b73f529cb9c3ba769e3e197f60cfe85f29f183c7d270da4143c8b4da228657af7d34a75d6effde26"]],"content":"delegated hello","sig":"ae573acf0402ee62cd9cc8d9faff832882f91862a213684fc73d17a460a301fcc4e6ed95192f0fcbb8720a5237c46eba243a240c37c6030a2c1180aefd809a2c"})");
+  _ok(check_event(ev),
+      "delegated kind 1 should pass with multiple kind conditions");
+
+  ev = string2event(
+      R"({"kind":7,"id":"a3f355b299fedd533b3f4e59564a0331df6c9b3c202b0f2a021a0df39eb1188a","pubkey":"477318cfb5427b9cfc66a9fa376150c1ddbc62115ae27cef72417eb959691396","created_at":1675000000,"tags":[["delegation","8e0d3d3eb2881ec137a11debe736a9086715a8c8beeeda615780064d68bc25dd","kind=1&kind=6&kind=7&created_at>1674834236&created_at<1677426236","b7557acbbfbe2f4d0ffe84ebf39f3e6ec94c97255a1800a2b73f529cb9c3ba769e3e197f60cfe85f29f183c7d270da4143c8b4da228657af7d34a75d6effde26"]],"content":"delegated hello","sig":"8e52b98fda7e1c126cc9599979a3c080bde2f22ee5661d34fb9593d0ab527aa60310e39a635df7cb3ee5350615d96fff88c4b6e91f4fe55c546a0911a5bf4780"})");
+  _ok(check_event(ev),
+      "delegated kind 7 should pass with multiple kind conditions");
+
+  ev = string2event(
+      R"({"kind":4,"id":"089677e381ca48c98a4cf40e5e62a1f5de8553a28f2acdd222fcd074c740c142","pubkey":"477318cfb5427b9cfc66a9fa376150c1ddbc62115ae27cef72417eb959691396","created_at":1675000000,"tags":[["delegation","8e0d3d3eb2881ec137a11debe736a9086715a8c8beeeda615780064d68bc25dd","kind=1&kind=6&kind=7&created_at>1674834236&created_at<1677426236","b7557acbbfbe2f4d0ffe84ebf39f3e6ec94c97255a1800a2b73f529cb9c3ba769e3e197f60cfe85f29f183c7d270da4143c8b4da228657af7d34a75d6effde26"]],"content":"delegated hello","sig":"9ec3cdf0c16aed1201f2b212a2cd215090cd5c51a58b3bc971320e4bfaee1aad66693ec3dd7fce4c1ebd7423a35a1888e7f1831c262b1c10629e2fd0489406a9"})");
+  _ok(!check_event(ev), "delegated kind 4 should fail: kind not permitted");
+
+  ev = string2event(
+      R"({"kind":1,"id":"2db224dbdf035ac2a7e77085c2e84d7e182d79ca1b207bc8b0652e00cb2649a5","pubkey":"477318cfb5427b9cfc66a9fa376150c1ddbc62115ae27cef72417eb959691396","created_at":1677500000,"tags":[["delegation","8e0d3d3eb2881ec137a11debe736a9086715a8c8beeeda615780064d68bc25dd","kind=1&kind=6&kind=7&created_at>1674834236&created_at<1677426236","b7557acbbfbe2f4d0ffe84ebf39f3e6ec94c97255a1800a2b73f529cb9c3ba769e3e197f60cfe85f29f183c7d270da4143c8b4da228657af7d34a75d6effde26"]],"content":"delegated hello","sig":"44c09c8aa955f265526edf9c4a6ed63f7f503ccf046893e118c96bb96da0e5964adbc730d0610b43df3ece0172308f979975a62893d004b34321fde89dfeaa43"})");
+  _ok(!check_event(ev),
+      "delegated event should fail: created_at is past the expiration");
+
+  ev = string2event(
+      R"({"kind":1,"id":"77e03e4feca354da5980a3a9262910d2f5c8d15caf344e20c47c29e43905bcc5","pubkey":"477318cfb5427b9cfc66a9fa376150c1ddbc62115ae27cef72417eb959691396","created_at":1675000000,"tags":[["delegation","8e0d3d3eb2881ec137a11debe736a9086715a8c8beeeda615780064d68bc25dd","kind=1&kind=6&kind=7&created_at>1674834236&created_at<1677426236","11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"]],"content":"delegated hello","sig":"b7bf28cd563d94a4a04a1b834f04a201689d0e24b629df817571feb75a4df7433832e01b1874d2fd810fba3a461ee5cbf9aacee7f01cc137a3e07cf1b8f04fee"})");
+  _ok(!check_event(ev),
+      "delegated event should fail: delegation token is invalid");
+}
+
 static void test_count_leading_zero_bits() {
   _ok(count_leading_zero_bits("ffff") == 0, "no leading zero bits");
   _ok(count_leading_zero_bits("7fff") == 1, "one leading zero bit");
@@ -408,6 +439,7 @@ int main() {
           test_delete_record_by_id_and_kind_and_ptag);
   subtest("test_delete_all_events_by_pubkey", test_delete_all_events_by_pubkey);
   subtest("test_cagliostr_sign", test_cagliostr_sign);
+  subtest("test_cagliostr_delegation", test_cagliostr_delegation);
   subtest("test_count_leading_zero_bits", test_count_leading_zero_bits);
   subtest("test_parse_a_coordinate", test_parse_a_coordinate);
   subtest("test_created_at_within_limits", test_created_at_within_limits);
