@@ -183,9 +183,9 @@ static inline void relay_notice(WebSocket *ws, const std::string &msg) {
   relay_send(ws, data);
 }
 
-static inline void relay_notice(WebSocket *ws, const std::string &id,
-                                const std::string &msg) {
-  nlohmann::json data = {"NOTICE", id, msg};
+static inline void relay_ok(WebSocket *ws, const std::string &id, bool ok,
+                            const std::string &msg) {
+  nlohmann::json data = {"OK", id, ok, msg};
   relay_send(ws, data);
 }
 
@@ -361,7 +361,7 @@ static void do_relay_req(WebSocket *ws, const nlohmann::json &data) {
   }
   int max_subs = nip11["limitation"]["max_subscriptions"];
   if (sub_count >= max_subs) {
-    relay_notice(ws, sub, "error: too many subscriptions");
+    relay_closed(ws, sub, "error: too many subscriptions");
     return;
   }
 
@@ -372,7 +372,7 @@ static void do_relay_req(WebSocket *ws, const nlohmann::json &data) {
       continue;
     }
     if (filters.size() >= static_cast<size_t>(max_filters)) {
-      relay_notice(ws, sub, "error: too many filters");
+      relay_closed(ws, sub, "error: too many filters");
       return;
     }
     try {
@@ -387,9 +387,7 @@ static void do_relay_req(WebSocket *ws, const nlohmann::json &data) {
     }
   }
   if (filters.empty()) {
-    const auto reply =
-        nlohmann::json::array({"NOTICE", sub, "error: invalid filter"});
-    relay_send(ws, reply);
+    relay_closed(ws, sub, "error: invalid filter");
     return;
   }
 
@@ -435,9 +433,7 @@ static void do_relay_count(WebSocket *ws, const nlohmann::json &data) {
     }
   }
   if (filters.empty()) {
-    const auto reply =
-        nlohmann::json::array({"NOTICE", sub, "error: invalid filter"});
-    relay_send(ws, reply);
+    relay_closed(ws, sub, "error: invalid filter");
     return;
   }
 
@@ -553,11 +549,11 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
     int max_tags = nip11["limitation"]["max_event_tags"];
     int max_content = nip11["limitation"]["max_content_length"];
     if (ev.tags.size() > static_cast<size_t>(max_tags)) {
-      relay_notice(ws, ev.id, "error: too many tags");
+      relay_ok(ws, ev.id, false, "invalid: too many tags");
       return;
     }
     if (ev.content.size() > static_cast<size_t>(max_content)) {
-      relay_notice(ws, ev.id, "error: content too large");
+      relay_ok(ws, ev.id, false, "invalid: content too large");
       return;
     }
 
@@ -573,7 +569,8 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
     }
 
     if (!check_event(ev)) {
-      relay_notice(ws, ev.id, "error: invalid id or signature");
+      relay_ok(ws, ev.id, false,
+               "invalid: event id, signature or delegation is invalid");
       return;
     }
 
@@ -685,14 +682,14 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
         // propagation)
         if (storage_ctx.delete_all_events_by_pubkey(ev.pubkey, ev.created_at) <
             0) {
-          relay_notice(ws, "error: failed to vanish events");
+          relay_ok(ws, ev.id, false, "error: failed to vanish events");
           return;
         }
       }
 
       // Always store kind 62 event for propagation to other relays
       if (!storage_ctx.insert_record(ev)) {
-        relay_notice(ws, "error: duplicate event");
+        relay_ok(ws, ev.id, false, "duplicate: event already exists");
         return;
       }
 
@@ -720,7 +717,7 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
                  (10000 <= ev.kind && ev.kind < 20000)) {
         if (storage_ctx.delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey,
                                                          ev.created_at) < 0) {
-          relay_notice(ws, "error: failed to replace event");
+          relay_ok(ws, ev.id, false, "error: failed to replace event");
           return;
         }
       } else if (30000 <= ev.kind && ev.kind < 40000) {
@@ -729,7 +726,7 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
           if (tag.size() >= 2 && tag[0] == "d") {
             if (storage_ctx.delete_record_by_kind_and_pubkey_and_dtag(
                     ev.kind, ev.pubkey, tag, ev.created_at) < 0) {
-              relay_notice(ws, "error: failed to replace event");
+              relay_ok(ws, ev.id, false, "error: failed to replace event");
               return;
             }
           }
@@ -737,7 +734,7 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       }
 
       if (!storage_ctx.insert_record(ev)) {
-        relay_notice(ws, "error: duplicate event");
+        relay_ok(ws, ev.id, false, "duplicate: event already exists");
         return;
       }
     }
@@ -759,7 +756,7 @@ static void do_relay_auth(WebSocket *ws, const nlohmann::json &data) {
   try {
     const event_t ev = data[1];
     if (!check_event(ev)) {
-      relay_notice(ws, "error: invalid id or signature");
+      relay_ok(ws, ev.id, false, "invalid: event id or signature is invalid");
       return;
     }
 
@@ -906,12 +903,7 @@ static void ws_message_handler(WebSocket *ws, std::string_view message,
     std::string method = payload[0];
     if (method != "EVENT" && method != "REQ" && method != "COUNT" &&
         method != "CLOSE" && method != "AUTH") {
-      if (payload.size() >= 2 && payload[1].is_string()) {
-        std::string id = payload[1];
-        relay_notice(ws, id, "error: invalid request");
-      } else {
-        relay_notice(ws, "error: invalid request");
-      }
+      relay_notice(ws, "error: invalid request");
       return;
     }
 
@@ -928,13 +920,23 @@ static void ws_message_handler(WebSocket *ws, std::string_view message,
 
     if (method == "REQ") {
       if (payload.size() < 3) {
-        relay_notice(ws, payload[1], "error: invalid request");
+        if (payload[1].is_string()) {
+          relay_closed(ws, payload[1].get<std::string>(),
+                       "error: invalid request");
+        } else {
+          relay_notice(ws, "error: invalid request");
+        }
         return;
       }
       do_relay_req(ws, payload);
     } else if (method == "COUNT") {
       if (payload.size() < 3) {
-        relay_notice(ws, payload[1], "error: invalid request");
+        if (payload[1].is_string()) {
+          relay_closed(ws, payload[1].get<std::string>(),
+                       "error: invalid request");
+        } else {
+          relay_notice(ws, "error: invalid request");
+        }
         return;
       }
       do_relay_count(ws, payload);
@@ -944,8 +946,6 @@ static void ws_message_handler(WebSocket *ws, std::string_view message,
       do_relay_event(ws, payload);
     } else if (method == "AUTH") {
       do_relay_auth(ws, payload);
-    } else {
-      relay_notice(ws, payload[1], "error: invalid request");
     }
   } catch (std::exception &e) {
     console->warn("!! {}", e.what());
