@@ -23,11 +23,14 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get -qq update
-        sudo apt-get install -y --no-install-recommends g++-12 libpq-dev
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 20
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 20
+        sudo apt-get install -y --no-install-recommends g++-14 libpq-dev
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 20
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 20
 
     - name: Configure CMake
+      env:
+        CC: gcc-14
+        CXX: g++-14
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
