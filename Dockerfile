@@ -6,6 +6,7 @@ RUN apk add --no-cache \
     cmake \
     make \
     git \
+    python3 \
     sqlite-dev \
     openssl-dev \
     postgresql-dev \
