@@ -779,6 +779,12 @@ static void do_relay_auth(WebSocket *ws, const nlohmann::json &data) {
     // NIP-42: verify the challenge and relay tags independently. Counting a
     // single total would let two "relay" tags satisfy the check without a
     // matching challenge, allowing a replayed AUTH event to authenticate.
+    // Normalize the configured service URL the same way as the relay tag so a
+    // trailing slash on either side does not cause a spurious mismatch.
+    std::string expected_relay = service_url;
+    while (!expected_relay.empty() && expected_relay.back() == '/')
+      expected_relay.pop_back();
+
     const auto cc = get_challenge(ws);
     bool challenge_matched = false;
     bool relay_matched = false;
@@ -792,7 +798,7 @@ static void do_relay_auth(WebSocket *ws, const nlohmann::json &data) {
         auto s = tag[1];
         while (!s.empty() && s.back() == '/')
           s.pop_back();
-        if (s == service_url)
+        if (s == expected_relay)
           relay_matched = true;
       }
     }
