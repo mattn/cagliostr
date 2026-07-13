@@ -760,25 +760,50 @@ static void do_relay_auth(WebSocket *ws, const nlohmann::json &data) {
       return;
     }
 
-    auto cc = get_challenge(ws);
-    auto ok = 0;
+    // NIP-42: the AUTH event must be kind 22242.
+    if (ev.kind != 22242) {
+      relay_ok(ws, ev.id, false, "invalid: auth event kind must be 22242");
+      return;
+    }
+
+    // NIP-42: created_at must be close (within ~10 minutes) to the current
+    // time to prevent replay of a previously observed AUTH event.
+    const std::time_t now = std::time(nullptr);
+    if (std::llabs(static_cast<long long>(now) -
+                   static_cast<long long>(ev.created_at)) > 600) {
+      relay_ok(ws, ev.id, false,
+               "invalid: auth event created_at is out of range");
+      return;
+    }
+
+    // NIP-42: verify the challenge and relay tags independently. Counting a
+    // single total would let two "relay" tags satisfy the check without a
+    // matching challenge, allowing a replayed AUTH event to authenticate.
+    // Normalize the configured service URL the same way as the relay tag so a
+    // trailing slash on either side does not cause a spurious mismatch.
+    std::string expected_relay = service_url;
+    while (!expected_relay.empty() && expected_relay.back() == '/')
+      expected_relay.pop_back();
+
+    const auto cc = get_challenge(ws);
+    bool challenge_matched = false;
+    bool relay_matched = false;
     for (const auto &tag : ev.tags) {
       if (tag.size() < 2)
         continue;
       if (tag[0] == "challenge") {
-        if (tag[1] == cc)
-          ok++;
-      }
-      if (tag[0] == "relay") {
+        if (!cc.empty() && tag[1] == cc)
+          challenge_matched = true;
+      } else if (tag[0] == "relay") {
         auto s = tag[1];
         while (!s.empty() && s.back() == '/')
           s.pop_back();
-        if (s == service_url)
-          ok++;
+        if (s == expected_relay)
+          relay_matched = true;
       }
     }
 
-    if (ok == 2) {
+    if (challenge_matched && relay_matched) {
       set_auth_pubkey(ws, ev.pubkey);
       nlohmann::json reply = {"OK", ev.id, true, ""};
       relay_send(ws, reply);
