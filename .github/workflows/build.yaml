@@ -28,6 +28,9 @@ jobs:
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 20
 
     - name: Configure CMake
+      env:
+        CC: gcc-14
+        CXX: g++-14
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
