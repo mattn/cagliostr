@@ -50,3 +50,4 @@ litestream.yaml
 .aider*
 .crush*
 *.sqlite
+.cache/
