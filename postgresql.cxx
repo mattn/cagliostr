@@ -73,7 +73,7 @@ static std::optional<event_t> get_event_by_id(const std::string &id) {
     if (r.empty())
       return std::nullopt;
 
-    auto row = r.begin();
+    auto row = r.front();
 
     nlohmann::json ej;
     ej["id"] = row["id"].c_str();
