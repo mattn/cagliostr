@@ -58,7 +58,7 @@ static auto nip11 = nlohmann::json{
     {"contact", "mattn.jp@gmail.com"},
     {"supported_nips",
      nlohmann::json::array({1, 2, 4, 9, 11, 12, 13, 15, 16, 20, 22, 26, 28, 33,
-                            40, 42, 45, 50, 62, 67, 70})},
+                            40, 42, 45, 50, 62, 67, 70, 91})},
     {"software", "https://github.com/mattn/cagliostr"},
     {"version", VERSION},
     {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024 * 5},
@@ -71,7 +71,9 @@ static auto nip11 = nlohmann::json{
                                   {"min_pow_difficulty", 0},
                                   {"auth_required", false},
                                   {"payment_required", false},
-                                  {"restricted_writes", false}}},
+                                  {"restricted_writes", false},
+                                  {"max_tags_and", 20},
+                                  {"max_tags_per_and", 20}}},
     {"fees", nlohmann::json::object()},
     {"relay_countries", nlohmann::json::array({"JP"})},
     {"icon",
@@ -294,17 +296,37 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
     }
   }
   for (auto it = data.cbegin(); it != data.cend(); ++it) {
-    if (!it.key().empty() && it.key().front() == '#' && it.value().is_array()) {
-      std::vector<std::string> tag = {it.key().substr(1)};
-      for (const auto &v : it.value()) {
-        if (!v.is_string()) {
-          console->warn("make_filter: tag {} elements must be string",
-                        it.key());
-          return false;
-        }
-        tag.push_back(v.get<std::string>());
+    if (it.key().size() < 2 || !it.value().is_array()) {
+      continue;
+    }
+    const auto prefix = it.key().front();
+    if (prefix != '#' && prefix != '&') {
+      continue;
+    }
+    std::vector<std::string> tag = {it.key().substr(1)};
+    for (const auto &v : it.value()) {
+      if (!v.is_string()) {
+        console->warn("make_filter: tag {} elements must be string", it.key());
+        return false;
       }
-      filter.tags.push_back(tag);
+      tag.push_back(v.get<std::string>());
+    }
+    if (prefix == '&') {
+      const int max_per = nip11["limitation"]["max_tags_per_and"];
+      if (static_cast<int>(tag.size()) - 1 > max_per) {
+        console->warn("make_filter: AND tag {} exceeds max_tags_per_and ({})",
+                      it.key(), max_per);
+        return false;
+      }
+      const int max_and = nip11["limitation"]["max_tags_and"];
+      if (static_cast<int>(filter.and_tags.size()) >= max_and) {
+        console->warn("make_filter: too many AND tag clauses (max {})",
+                      max_and);
+        return false;
+      }
+      filter.and_tags.push_back(std::move(tag));
+    } else {
+      filter.tags.push_back(std::move(tag));
     }
   }
   if (data.count("since") > 0) {
@@ -452,93 +474,6 @@ static void do_relay_close(WebSocket *ws, const nlohmann::json &data) {
       it++;
     }
   }
-}
-
-static bool matched_filters(const std::vector<filter_t> &filters,
-                            const event_t &ev) {
-  auto found = false;
-  for (const auto &filter : filters) {
-    if (!filter.ids.empty()) {
-      const auto result =
-          std::find(filter.ids.begin(), filter.ids.end(), ev.id);
-      if (result == filter.ids.end()) {
-        continue;
-      }
-    }
-    if (!filter.authors.empty()) {
-      const auto result =
-          std::find(filter.authors.begin(), filter.authors.end(), ev.pubkey);
-      if (result == filter.authors.end()) {
-        continue;
-      }
-    }
-    if (!filter.kinds.empty()) {
-      const auto result =
-          std::find(filter.kinds.begin(), filter.kinds.end(), ev.kind);
-      if (result == filter.kinds.end()) {
-        continue;
-      }
-    }
-    if (filter.since > 0) {
-      if (filter.since > ev.created_at) {
-        continue;
-      }
-    }
-    if (filter.until > 0) {
-      if (ev.created_at > filter.until) {
-        continue;
-      }
-    }
-    if (!filter.tags.empty()) {
-      auto all_tags_matched = true;
-      for (const auto &filter_tag : filter.tags) {
-        if (filter_tag.size() < 2)
-          continue;
-        bool this_tag_matched = false;
-        for (const auto &tag : ev.tags) {
-          if (tag.size() < 2)
-            continue;
-          if (tag[0] != filter_tag[0])
-            continue;
-          for (size_t fi = 1; fi < filter_tag.size(); fi++) {
-            if (tag[1] == filter_tag[fi]) {
-              this_tag_matched = true;
-              break;
-            }
-          }
-          if (this_tag_matched)
-            break;
-        }
-        if (!this_tag_matched) {
-          all_tags_matched = false;
-          break;
-        }
-      }
-      if (!all_tags_matched) {
-        continue;
-      }
-    }
-    if (!filter.search.empty()) {
-      auto found_search = true;
-      std::string content = ev.content;
-      std::transform(content.begin(), content.end(), content.begin(),
-                     ::tolower);
-      std::istringstream iss(filter.search);
-      std::string word;
-      while (iss >> word) {
-        std::transform(word.begin(), word.end(), word.begin(), ::tolower);
-        if (content.find(word) == std::string::npos) {
-          found_search = false;
-          break;
-        }
-      }
-      if (!found_search) {
-        continue;
-      }
-    }
-    found = true;
-  }
-  return found;
 }
 
 static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
