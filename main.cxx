@@ -57,8 +57,8 @@ static auto nip11 = nlohmann::json{
      "2c7cc62a697ea3a7826521f3fd34f0cb273693cbe5e9310f35449f43622a5cdc"},
     {"contact", "mattn.jp@gmail.com"},
     {"supported_nips",
-     nlohmann::json::array({1, 2, 4, 9, 11, 12, 13, 15, 16, 20, 22, 26, 28, 33,
-                            40, 42, 45, 50, 59, 62, 67, 70})},
+     nlohmann::json::array({1, 2, 4, 9, 11, 12, 13, 15, 16, 17, 20, 22, 26, 28,
+                            33, 40, 42, 45, 50, 59, 62, 67, 70})},
     {"software", "https://github.com/mattn/cagliostr"},
     {"version", VERSION},
     {"limitation", nlohmann::json{{"max_message_length", 1024 * 1024 * 5},
@@ -168,6 +168,25 @@ static bool check_auth_pubkey(WebSocket *ws, const std::string &pubkey) {
   auto *data = ws->getUserData();
   if (data) {
     return data->pubkey == pubkey;
+  }
+  return false;
+}
+
+// NIP-17: gift wraps (kind:1059, and ephemeral kind:21059) are only served
+// to clients authenticated via NIP-42 as one of the p-tagged recipients.
+template <typename Tags>
+static bool can_serve_gift_wrap(WebSocket *ws, int kind, const Tags &tags) {
+  if (kind != 1059 && kind != 21059) {
+    return true;
+  }
+  const auto *data = ws->getUserData();
+  if (data == nullptr || data->pubkey.empty()) {
+    return false;
+  }
+  for (const auto &tag : tags) {
+    if (tag.size() >= 2 && tag[0] == "p" && tag[1] == data->pubkey) {
+      return true;
+    }
   }
   return false;
 }
@@ -405,8 +424,14 @@ static void do_relay_req(WebSocket *ws, const nlohmann::json &data) {
 
   bool has_more = false;
   storage_ctx.send_records(
-      [&](const nlohmann::json &_data) { relay_send(ws, _data); }, sub, filters,
-      false, &has_more);
+      [&](const nlohmann::json &_data) {
+        const auto &ej = _data[2];
+        if (!can_serve_gift_wrap(ws, ej["kind"].get<int>(), ej["tags"])) {
+          return;
+        }
+        relay_send(ws, _data);
+      },
+      sub, filters, false, &has_more);
   // NIP-67: hint whether all matching stored events have been sent.
   const auto reply = nlohmann::json::array(
       {"EOSE", sub, nlohmann::json::array({has_more ? "more" : "finish"})});
@@ -707,7 +732,8 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
         nlohmann::json ok_reply = {"OK", ev.id, true, ""};
         relay_send(ws, ok_reply);
         for (const auto &s : subscribers) {
-          if (matched_filters(s.filters, ev)) {
+          if (matched_filters(s.filters, ev) &&
+              can_serve_gift_wrap(s.ws, ev.kind, ev.tags)) {
             nlohmann::json fwd = {"EVENT", s.sub, ev};
             relay_send(s.ws, fwd);
           }
@@ -742,7 +768,8 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
     nlohmann::json reply = {"OK", ev.id, true, ""};
     relay_send(ws, reply);
     for (const auto &s : subscribers) {
-      if (matched_filters(s.filters, ev)) {
+      if (matched_filters(s.filters, ev) &&
+          can_serve_gift_wrap(s.ws, ev.kind, ev.tags)) {
         nlohmann::json reply = {"EVENT", s.sub, ev};
         relay_send(s.ws, reply);
       }
@@ -904,6 +931,11 @@ static void ws_open_handler(WebSocket *ws) {
   }
   data->challenge = generate_random_hex_16();
   data->pubkey = "";
+
+  // NIP-42: clients need a challenge from the relay before they can
+  // authenticate, which NIP-17 requires before gift wraps are served.
+  nlohmann::json auth = {"AUTH", data->challenge};
+  relay_send(ws, auth);
 
   console->debug("CONNECTED {}", data->ip);
 }
