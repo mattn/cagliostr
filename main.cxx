@@ -48,6 +48,12 @@ static std::string service_url;
 static std::time_t created_at_lower_limit = 0;
 static std::time_t created_at_upper_limit = 900;
 
+// Rate limiting: fixed-window counters that cap how many events a single IP
+// address or pubkey may submit within the configured window. Disabled (limit 0)
+// by default.
+static rate_limiter_t ip_rate_limiter;
+static rate_limiter_t pubkey_rate_limiter;
+
 static storage_context_t storage_ctx;
 
 static auto nip11 = nlohmann::json{
@@ -582,6 +588,17 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       return;
     }
 
+    // Rate limit by source IP before the expensive signature check. The IP is
+    // attacker-controllable only via spoofing the upstream proxy, so it is safe
+    // to throttle on before verification.
+    if (ip_rate_limiter.enabled() &&
+        !ip_rate_limiter.allow(realIP(ws), std::time(nullptr))) {
+      const auto reply = nlohmann::json::array(
+          {"OK", ev.id, false, "rate-limited: too many events from your IP"});
+      relay_send(ws, reply);
+      return;
+    }
+
     // NIP-22: reject events whose created_at is outside the accepted window.
     if (!created_at_within_limits(ev.created_at, std::time(nullptr),
                                   created_at_lower_limit,
@@ -596,6 +613,16 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
     if (!check_event(ev)) {
       relay_ok(ws, ev.id, false,
                "invalid: event id, signature or delegation is invalid");
+      return;
+    }
+
+    // Rate limit by pubkey only after the signature is verified, so that a
+    // forged event cannot get another author's pubkey throttled.
+    if (pubkey_rate_limiter.enabled() &&
+        !pubkey_rate_limiter.allow(ev.pubkey, std::time(nullptr))) {
+      const auto reply = nlohmann::json::array(
+          {"OK", ev.id, false, "rate-limited: too many events from your key"});
+      relay_send(ws, reply);
       return;
     }
 
@@ -1184,6 +1211,26 @@ int main(int argc, char *argv[]) {
         .metavar("SECONDS")
         .scan<'i', int>()
         .nargs(1);
+    program.add_argument("-rate-limit-ip")
+        .default_value(static_cast<int>(std::stoi(env("RATE_LIMIT_IP", "0"))))
+        .help("max events per window from a single IP (0 disables)")
+        .metavar("COUNT")
+        .scan<'i', int>()
+        .nargs(1);
+    program.add_argument("-rate-limit-pubkey")
+        .default_value(
+            static_cast<int>(std::stoi(env("RATE_LIMIT_PUBKEY", "0"))))
+        .help("max events per window from a single pubkey (0 disables)")
+        .metavar("COUNT")
+        .scan<'i', int>()
+        .nargs(1);
+    program.add_argument("-rate-limit-window")
+        .default_value(
+            static_cast<int>(std::stoi(env("RATE_LIMIT_WINDOW", "60"))))
+        .help("rate limit window in seconds (shared by IP and pubkey limits)")
+        .metavar("SECONDS")
+        .scan<'i', int>()
+        .nargs(1);
     program.add_argument("-port")
         .default_value(static_cast<short>(7447))
         .help("port number")
@@ -1239,6 +1286,25 @@ int main(int argc, char *argv[]) {
 
   created_at_lower_limit = program.get<int>("-created-at-lower-limit");
   created_at_upper_limit = program.get<int>("-created-at-upper-limit");
+
+  {
+    int rate_limit_window = program.get<int>("-rate-limit-window");
+    int rate_limit_ip = program.get<int>("-rate-limit-ip");
+    int rate_limit_pubkey = program.get<int>("-rate-limit-pubkey");
+    ip_rate_limiter.configure(rate_limit_ip, rate_limit_window);
+    pubkey_rate_limiter.configure(rate_limit_pubkey, rate_limit_window);
+    // NIP-11: advertise the active rate limits so clients can pace themselves.
+    if (ip_rate_limiter.enabled() || pubkey_rate_limiter.enabled()) {
+      nip11["limitation"]["restricted_writes"] = true;
+      nip11["limitation"]["rate_limit_window"] = rate_limit_window;
+      if (ip_rate_limiter.enabled()) {
+        nip11["limitation"]["max_events_per_ip"] = rate_limit_ip;
+      }
+      if (pubkey_rate_limiter.enabled()) {
+        nip11["limitation"]["max_events_per_pubkey"] = rate_limit_pubkey;
+      }
+    }
+  }
 
   // Setup signal handler
   std::signal(SIGINT, signal_handler);
