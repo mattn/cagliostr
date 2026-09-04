@@ -228,6 +228,15 @@ static void test_send_records_filters() {
   _ok(has_more, "send_records reports more when events remain beyond the limit");
   replies.clear();
 
+  filter_t live_only;
+  live_only.limit = 0;
+  has_more = false;
+  _ok(storage_ctx.send_records(sender, "sub-live-only", {live_only}, false, &has_more),
+      "send_records accepts a zero limit");
+  _ok(replies.empty(), "limit zero returns no stored events");
+  _ok(has_more, "limit zero reports that stored events remain");
+  replies.clear();
+
   filter_t all_rows;
   all_rows.limit = 10;
   _ok(storage_ctx.send_records(sender, "sub-expiration", {all_rows}, false, nullptr),

@@ -209,7 +209,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       os << filter.until;
       conditions.push_back("created_at <= " + os.str());
     }
-    if (filter.limit > 0 && filter.limit < limit) {
+    if (filter.limit >= 0 && filter.limit < limit) {
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
