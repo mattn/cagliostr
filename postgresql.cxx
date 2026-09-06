@@ -245,10 +245,19 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.append(filter.search);
-      conditions.push_back(
-          R"(LENGTH(content) <= 600 AND to_tsvector('simple', content) @@ plainto_tsquery('simple', $)" +
-          std::to_string(++pno) + ")");
+      // NIP-50 substring match, the same semantics the SQLite backend and the
+      // live broadcast matcher use. to_tsvector only matches whole lexemes, so
+      // it never found a term inside a longer run of characters -- a search for
+      // "レバノン" missed a stored "レバノン案件取りたいなあ", and "東京" missed
+      // "東京都". Each whitespace-separated term must be present, mirroring
+      // plainto_tsquery's all-terms semantics.
+      std::istringstream iss(filter.search);
+      std::string term;
+      while (iss >> term) {
+        params.append("%" + escape_like(term) + "%");
+        conditions.push_back("content ILIKE $" + std::to_string(++pno) +
+                             R"( ESCAPE '\')");
+      }
     }
     if (!conditions.empty()) {
       sql += " WHERE " + join(conditions, " AND ");
@@ -496,7 +505,8 @@ static void storage_init(const std::string &dsn) {
       CREATE INDEX IF NOT EXISTS kindidx ON event (kind);
       CREATE INDEX IF NOT EXISTS kindtimeidx ON event(kind,created_at DESC);
       CREATE INDEX IF NOT EXISTS arbitrarytagvalues ON event USING gin (tagvalues);
-      CREATE INDEX IF NOT EXISTS content_search_idx ON event USING gin (to_tsvector('simple', content)) WHERE length(content) <= 600;
+      CREATE EXTENSION IF NOT EXISTS pg_trgm;
+      CREATE INDEX IF NOT EXISTS contenttrgmidx ON event USING gin (content gin_trgm_ops);
     )");
     txn.commit();
   } catch (const std::exception &e) {
