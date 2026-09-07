@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 #include <pqxx/pqxx>
 #include <sstream>
+#include <unordered_set>
 #include <string>
 #include <vector>
 
@@ -154,7 +155,11 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
   if (!ensure_connection()) {
     return false;
   }
-  auto count = 0;
+  int64_t count = 0;
+  std::unordered_set<std::string> sent_ids;
+  std::vector<std::string> count_conditions;
+  pqxx::params params;
+  int pno = 0;
   if (has_more != nullptr) {
     *has_more = false;
   }
@@ -168,9 +173,11 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     }
 
     auto limit = 500;
-    pqxx::params params;
+    if (!do_count) {
+      params = pqxx::params{};
+      pno = 0;
+    }
     std::vector<std::string> conditions;
-    int pno = 0;
     if (!filter.ids.empty()) {
       if (filter.ids.size() == 1) {
         conditions.push_back("id = $" + std::to_string(++pno));
@@ -257,13 +264,19 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
                              R"( ESCAPE '\')");
       }
     }
-    if (!conditions.empty()) {
+    if (do_count) {
+      count_conditions.push_back(conditions.empty() ? "1=1" : join(conditions, " AND "));
+      if (count_conditions.size() != filters.size()) {
+        continue;
+      }
+      sql = "SELECT COUNT(*) FROM event WHERE (" + join(count_conditions, ") OR (") + ")";
+    } else if (!conditions.empty()) {
       sql += " WHERE " + join(conditions, " AND ");
     }
     if (!do_count) {
       // Fetch one extra row so we can tell whether more matching events exist
       // beyond the requested limit (NIP-67 EOSE completeness hint).
-      sql += " ORDER BY created_at DESC LIMIT " + std::to_string(limit + 1);
+      sql += " ORDER BY created_at DESC, id ASC LIMIT " + std::to_string(limit + 1);
     }
 
     pqxx::work txn(*conn);
@@ -271,7 +284,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     txn.commit();
 
     if (do_count) {
-      count += r.one_field().as<int>();
+      count += r.one_field().as<int64_t>();
     } else {
       auto fetched = 0;
       for (const auto &row : r) {
@@ -301,7 +314,9 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         }
 
         nlohmann::json reply = {"EVENT", sub, ej};
-        sender(reply);
+        if (sent_ids.insert(ej["id"].get<std::string>()).second) {
+          sender(reply);
+        }
       }
     }
   }
