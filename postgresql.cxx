@@ -220,14 +220,14 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
           "EXISTS (SELECT 1 FROM jsonb_array_elements(event.tags) AS tag "
           "WHERE tag->>0 = " + key + " AND tag->>1 IN (" + values + "))");
     }
-    if (filter.since != 0) {
+    if (filter.since.has_value()) {
       std::ostringstream os;
-      os << filter.since;
+      os << *filter.since;
       conditions.push_back("created_at >= " + os.str());
     }
-    if (filter.until != 0) {
+    if (filter.until.has_value()) {
       std::ostringstream os;
-      os << filter.until;
+      os << *filter.until;
       conditions.push_back("created_at <= " + os.str());
     }
     if (filter.limit >= 0 && filter.limit < limit) {

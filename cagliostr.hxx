@@ -28,8 +28,8 @@ using filter_t = struct filter_t {
   std::vector<std::string> authors{};
   std::vector<int> kinds{};
   std::vector<std::vector<std::string>> tags{};
-  std::time_t since{};
-  std::time_t until{};
+  std::optional<std::time_t> since;
+  std::optional<std::time_t> until;
   int limit{500};
   std::string search;
 };
