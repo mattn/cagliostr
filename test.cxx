@@ -374,6 +374,29 @@ static void test_overlapping_filters() {
   storage_ctx.deinit();
 }
 
+static void test_zero_time_filters() {
+  auto storage_ctx = init_test_storage();
+  for (int timestamp : {-1, 0, 1}) {
+    _ok(storage_ctx.insert_record(make_event("epoch-" + std::to_string(timestamp),
+                                             "owner", timestamp, 1, {}, "")), "insert epoch fixture");
+  }
+  auto query = [&](filter_t filter, std::vector<int> expected) {
+    std::vector<int> timestamps;
+    _ok(storage_ctx.send_records([&](const nlohmann::json& r) { timestamps.push_back(r[2]["created_at"]); },
+                                 "epoch", {filter}, false, nullptr), "query epoch boundary");
+    _ok(timestamps == expected, "explicit epoch boundary is not an absent filter");
+  };
+  filter_t filter;
+  filter.until = 0;
+  query(filter, {0, -1});
+  filter = filter_t{};
+  filter.since = 0;
+  query(filter, {1, 0});
+  filter.until = 0;
+  query(filter, {0});
+  storage_ctx.deinit();
+}
+
 static void test_tag_filter_matching() {
   auto storage_ctx = init_test_storage();
   std::vector<event_t> events = {
@@ -650,6 +673,7 @@ int main() {
   if (!std::getenv("CAGLIOSTR_TEST_POSTGRES_DSN"))
     subtest("test_sqlite_event_roundtrip", test_sqlite_event_roundtrip);
   subtest("test_overlapping_filters", test_overlapping_filters);
+  subtest("test_zero_time_filters", test_zero_time_filters);
   subtest("test_tag_filter_matching", test_tag_filter_matching);
   subtest("test_send_records_filters", test_send_records_filters);
   subtest("test_delete_record_by_id_and_kind_and_ptag",
