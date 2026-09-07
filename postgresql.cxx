@@ -350,97 +350,53 @@ static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey,
   }
 }
 
-static int
-delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
-                                          const std::vector<std::string> &tag,
-                                          std::time_t created_at) {
+static int delete_record_by_kind_and_pubkey_and_dtag(
+    int kind, const std::string &pubkey,
+    const std::vector<std::string> &tag, std::time_t created_at) {
+  if (tag.size() < 2) {
+    return 0;
+  }
   if (!ensure_connection()) {
     return -1;
   }
-  nlohmann::json data = nlohmann::json::array({tag});
-  std::vector<std::string> ids;
-
-  {
+  try {
     pqxx::work txn(*conn);
-    pqxx::result r = txn.exec(
-        R"(SELECT id FROM event WHERE kind = $1 AND pubkey = $2 AND tags @> $3::jsonb AND created_at < $4)",
-        pqxx::params{kind, pubkey, data.dump(), created_at});
+    auto result = txn.exec(
+        R"(DELETE FROM event WHERE kind = $1 AND pubkey = $2 AND created_at < $3
+           AND EXISTS (SELECT 1 FROM jsonb_array_elements(event.tags) AS tag
+                       WHERE tag->>0 = $4 AND tag->>1 = $5))",
+        pqxx::params{kind, pubkey, created_at, tag[0], tag[1]});
+    auto affected = result.affected_rows();
     txn.commit();
-
-    for (const auto &row : r) {
-      ids.push_back(row["id"].c_str());
-    }
+    return affected;
+  } catch (const std::exception &e) {
+    console->error("{}", e.what());
+    return -1;
   }
-  data.clear();
-
-  if (ids.empty()) {
-    return 0;
-  }
-
-  std::string condition;
-  pqxx::params params;
-  for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
-    condition += "$" + std::to_string(i + 1) + ",";
-    params.append(ids[i]);
-  }
-  condition.pop_back();
-
-  int affected = 0;
-  {
-    pqxx::work txn(*conn);
-    pqxx::result r =
-        txn.exec("DELETE FROM event WHERE id IN (" + condition + ")", params);
-    affected = r.affected_rows();
-    txn.commit();
-  }
-
-  return affected;
 }
 
-static int
-delete_record_by_id_and_kind_and_ptag(const std::string &id, int kind,
-                                      const std::vector<std::string> &tag) {
+static int delete_record_by_id_and_kind_and_ptag(
+    const std::string &id, int kind, const std::vector<std::string> &tag) {
+  if (tag.size() < 2) {
+    return 0;
+  }
   if (!ensure_connection()) {
     return -1;
   }
-  nlohmann::json data = nlohmann::json::array({tag});
-  std::vector<std::string> ids;
-
-  {
+  try {
     pqxx::work txn(*conn);
-    pqxx::result r = txn.exec(
-        R"(SELECT id FROM event WHERE id = $1 AND kind = $2 AND tags @> $3::jsonb)",
-        pqxx::params{id, kind, data.dump()});
+    auto result = txn.exec(
+        R"(DELETE FROM event WHERE id = $1 AND kind = $2
+           AND EXISTS (SELECT 1 FROM jsonb_array_elements(event.tags) AS tag
+                       WHERE tag->>0 = $3 AND tag->>1 = $4))",
+        pqxx::params{id, kind, tag[0], tag[1]});
+    auto affected = result.affected_rows();
     txn.commit();
-
-    for (const auto &row : r) {
-      ids.push_back(row["id"].c_str());
-    }
+    return affected;
+  } catch (const std::exception &e) {
+    console->error("{}", e.what());
+    return -1;
   }
-  data.clear();
-
-  if (ids.empty()) {
-    return 0;
-  }
-
-  std::string condition;
-  pqxx::params params;
-  for (decltype(ids.size()) i = 0; i < ids.size(); i++) {
-    condition += "$" + std::to_string(i + 1) + ",";
-    params.append(ids[i]);
-  }
-  condition.pop_back();
-
-  int affected = 0;
-  {
-    pqxx::work txn(*conn);
-    pqxx::result r =
-        txn.exec("DELETE FROM event WHERE id IN (" + condition + ")", params);
-    affected = r.affected_rows();
-    txn.commit();
-  }
-
-  return affected;
 }
 
 static int delete_all_events_by_pubkey(const std::string &pubkey,
