@@ -11,6 +11,8 @@
 #include <spdlog/spdlog.h>
 
 #include <filesystem>
+#include <cstdlib>
+#include <pqxx/pqxx>
 #include <vector>
 
 static event_t string2event(const std::string& string) {
@@ -42,8 +44,17 @@ static event_t make_event(const std::string& id, const std::string& pubkey,
 }
 
 static storage_context_t init_test_storage(const char* path = "test.sqlite") {
-  std::filesystem::remove(path);
   storage_context_t storage_ctx;
+  if (const char* dsn = std::getenv("CAGLIOSTR_TEST_POSTGRES_DSN")) {
+    storage_context_init_postgresql(storage_ctx);
+    storage_ctx.init(dsn);
+    pqxx::connection conn(dsn);
+    pqxx::work txn(conn);
+    txn.exec("TRUNCATE event");
+    txn.commit();
+    return storage_ctx;
+  }
+  std::filesystem::remove(path);
   storage_context_init_sqlite3(storage_ctx);
   storage_ctx.init(path);
   return storage_ctx;
@@ -289,6 +300,36 @@ static void test_send_records_filters() {
   storage_ctx.deinit();
 }
 
+static void test_tag_filter_matching() {
+  auto storage_ctx = init_test_storage();
+  std::vector<event_t> events = {
+      make_event("tag-extra", "owner", 1700000000, 1, {{"t", "one", "relay"}, {"r", "two"}}, ""),
+      make_event("tag-one", "owner", 1700000001, 1, {{"t", "one"}}, ""),
+      make_event("tag-wrong-key", "owner", 1700000002, 1, {{"r", "one"}}, ""),
+      make_event("tag-wrong-case", "owner", 1700000003, 1, {{"t", "ONE"}}, ""),
+      make_event("tag-literal", "owner", 1700000004, 1, {{"t", "a_%\\b\""}}, ""),
+  };
+  for (const auto& ev : events) _ok(storage_ctx.insert_record(ev), "insert tag fixture");
+  auto query = [&](std::vector<std::vector<std::string>> tags, std::vector<std::string> expected) {
+    filter_t filter;
+    filter.tags = std::move(tags);
+    std::vector<std::string> ids;
+    _ok(storage_ctx.send_records([&](const nlohmann::json& r) { ids.push_back(r[2]["id"]); },
+                                 "tag-query", {filter}, false, nullptr), "query tag filter");
+    _ok(ids == expected, "tag filters match exact key/value pairs with AND across keys");
+    int count = -1;
+    _ok(storage_ctx.send_records([&](const nlohmann::json& r) { count = r[2]["count"]; },
+                                 "tag-count", {filter}, true, nullptr), "count tag filter");
+    _ok(count == static_cast<int>(expected.size()), "count uses the same tag conditions");
+  };
+  query({{"t", "one"}}, {"tag-one", "tag-extra"});
+  query({{"t", "one"}, {"r", "two"}}, {"tag-extra"});
+  query({{"t", "one", "ONE"}}, {"tag-wrong-case", "tag-one", "tag-extra"});
+  query({{"T", "one"}}, {});
+  query({{"t", "a_%\\b\""}}, {"tag-literal"});
+  storage_ctx.deinit();
+}
+
 static void test_delete_record_by_id_and_kind_and_ptag() {
   auto storage_ctx = init_test_storage();
   auto id = "event-ptag-1";
@@ -476,7 +517,9 @@ int main() {
   subtest("test_cagliostr_records", test_cagliostr_records);
   subtest("test_event_json_roundtrip", test_event_json_roundtrip);
   subtest("test_get_event_by_id", test_get_event_by_id);
-  subtest("test_sqlite_event_roundtrip", test_sqlite_event_roundtrip);
+  if (!std::getenv("CAGLIOSTR_TEST_POSTGRES_DSN"))
+    subtest("test_sqlite_event_roundtrip", test_sqlite_event_roundtrip);
+  subtest("test_tag_filter_matching", test_tag_filter_matching);
   subtest("test_send_records_filters", test_send_records_filters);
   subtest("test_delete_record_by_id_and_kind_and_ptag",
           test_delete_record_by_id_and_kind_and_ptag);

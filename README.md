@@ -31,6 +31,13 @@ $ git submodule update --init --recursive
 $ cmake -B build && cmake --build build
 ```
 
+## Tests
+
+Run `ctest --test-dir build --output-on-failure` for SQLite tests.
+To test PostgreSQL, set `CAGLIOSTR_TEST_POSTGRES_DSN` to a disposable test
+database connection string and run the same command. The PostgreSQL tests
+truncate the `event` table before each storage test.
+
 ## License
 
 MIT
