@@ -3,6 +3,7 @@
 #include <ctime>
 #include <iostream>
 #include <sstream>
+#include <unordered_set>
 
 #include <sqlite3.h>
 
@@ -122,7 +123,10 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
                          const std::string &sub,
                          const std::vector<filter_t> &filters, bool do_count,
                          bool *has_more) {
-  auto count = 0;
+  int64_t count = 0;
+  std::unordered_set<std::string> sent_ids;
+  std::vector<std::string> count_conditions;
+  std::vector<param_t> params;
   if (has_more != nullptr) {
     *has_more = false;
   }
@@ -136,7 +140,9 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     }
 
     auto limit = 500;
-    std::vector<param_t> params;
+    if (!do_count) {
+      params.clear();
+    }
     std::vector<std::string> conditions;
     if (!filter.ids.empty()) {
       if (filter.ids.size() == 1) {
@@ -209,15 +215,25 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       limit = filter.limit;
     }
     if (!filter.search.empty()) {
-      params.push_back({.t = PARAM_TYPE_STRING,
-                        .s = "%" + escape_like(filter.search) + "%"});
-      conditions.push_back(R"(content LIKE ? ESCAPE '\')");
+      std::istringstream iss(filter.search);
+      std::string term;
+      while (iss >> term) {
+        params.push_back({.t = PARAM_TYPE_STRING,
+                          .s = "%" + escape_like(term) + "%"});
+        conditions.push_back(R"(content LIKE ? ESCAPE '\')");
+      }
     }
-    if (!conditions.empty()) {
+    if (do_count) {
+      count_conditions.push_back(conditions.empty() ? "1=1" : join(conditions, " AND "));
+      if (count_conditions.size() != filters.size()) {
+        continue;
+      }
+      sql = "SELECT COUNT(*) FROM event WHERE (" + join(count_conditions, ") OR (") + ")";
+    } else if (!conditions.empty()) {
       sql += " WHERE " + join(conditions, " AND ");
     }
     if (!do_count) {
-      sql += " ORDER BY created_at DESC LIMIT ?";
+      sql += " ORDER BY created_at DESC, id ASC LIMIT ?";
     }
 
     sqlite3_stmt *stmt = nullptr;
@@ -247,12 +263,12 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
     }
     if (do_count) {
       ret = sqlite3_step(stmt);
-      if (ret == SQLITE_DONE) {
+      if (ret != SQLITE_ROW) {
         console->error("{}", sqlite3_errmsg(conn));
         sqlite3_finalize(stmt);
         return false;
       }
-      count += sqlite3_column_int(stmt, 0);
+      count += sqlite3_column_int64(stmt, 0);
       sqlite3_finalize(stmt);
     } else {
       auto fetched = 0;
@@ -260,6 +276,11 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         ret = sqlite3_step(stmt);
         if (ret == SQLITE_DONE) {
           break;
+        }
+        if (ret != SQLITE_ROW) {
+          console->error("{}", sqlite3_errmsg(conn));
+          sqlite3_finalize(stmt);
+          return false;
         }
         if (++fetched > limit) {
           // The extra row proves more matching events remain on the relay.
@@ -288,7 +309,9 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         }
 
         nlohmann::json reply = {"EVENT", sub, ej};
-        sender(reply);
+        if (sent_ids.insert(ej["id"].get<std::string>()).second) {
+          sender(reply);
+        }
       }
       sqlite3_finalize(stmt);
     }

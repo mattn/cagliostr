@@ -339,6 +339,41 @@ static void test_send_records_filters() {
   storage_ctx.deinit();
 }
 
+static void test_overlapping_filters() {
+  auto storage_ctx = init_test_storage();
+  auto second = make_event("query-b", "owner", 1700000000, 1, {}, "unrelated");
+  auto first = make_event("query-a", "owner", 1700000000, 1, {}, "beta between ALPHA");
+  _ok(storage_ctx.insert_record(second), "insert higher id first");
+  _ok(storage_ctx.insert_record(first), "insert lower id second");
+  std::vector<std::string> ids;
+  auto sender = [&](const nlohmann::json& r) { ids.push_back(r[2]["id"]); };
+  filter_t all;
+  _ok(storage_ctx.send_records(sender, "query", {all, all}, false, nullptr), "query overlapping filters");
+  _ok(ids == std::vector<std::string>({first.id, second.id}), "emit each event once in timestamp/id order");
+  filter_t by_id;
+  by_id.ids = {first.id};
+  by_id.limit = 0;
+  int count = -1;
+  _ok(storage_ctx.send_records([&](const nlohmann::json& r) { count = r[2]["count"]; },
+                               "count", {by_id, all}, true, nullptr), "count overlapping filters");
+  _ok(count == 2, "count is a union and ignores filter limits");
+  filter_t tagged;
+  tagged.tags = {{"t", "missing"}};
+  _ok(storage_ctx.send_records([&](const nlohmann::json& r) { count = r[2]["count"]; },
+                               "count", {tagged, by_id}, true, nullptr), "count distinct parameterized filters");
+  _ok(count == 1, "each filter retains its own parameter bindings");
+  by_id.ids = {"absent"};
+  _ok(storage_ctx.send_records([&](const nlohmann::json& r) { count = r[2]["count"]; },
+                               "count", {by_id, by_id}, true, nullptr), "count empty filters");
+  _ok(count == 0, "count empty union");
+  filter_t search;
+  search.search = "alpha beta";
+  ids.clear();
+  _ok(storage_ctx.send_records(sender, "search", {search}, false, nullptr), "query multiple search words");
+  _ok(ids == std::vector<std::string>({first.id}), "search words match independently like live delivery");
+  storage_ctx.deinit();
+}
+
 static void test_tag_filter_matching() {
   auto storage_ctx = init_test_storage();
   std::vector<event_t> events = {
@@ -601,6 +636,7 @@ int main() {
   subtest("test_get_event_by_id", test_get_event_by_id);
   if (!std::getenv("CAGLIOSTR_TEST_POSTGRES_DSN"))
     subtest("test_sqlite_event_roundtrip", test_sqlite_event_roundtrip);
+  subtest("test_overlapping_filters", test_overlapping_filters);
   subtest("test_tag_filter_matching", test_tag_filter_matching);
   subtest("test_send_records_filters", test_send_records_filters);
   subtest("test_delete_record_by_id_and_kind_and_ptag",
