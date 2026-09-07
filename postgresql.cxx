@@ -78,7 +78,7 @@ static std::optional<event_t> get_event_by_id(const std::string &id) {
     nlohmann::json ej;
     ej["id"] = row["id"].c_str();
     ej["pubkey"] = row["pubkey"].c_str();
-    ej["created_at"] = row["created_at"].as<int>();
+    ej["created_at"] = row["created_at"].as<std::time_t>();
     ej["kind"] = row["kind"].as<int>();
     const char *j = row["tags"].c_str();
     ej["tags"] = nlohmann::json::parse(j);
@@ -285,7 +285,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         nlohmann::json ej;
         ej["id"] = row["id"].c_str();
         ej["pubkey"] = row["pubkey"].c_str();
-        ej["created_at"] = row["created_at"].as<int>();
+        ej["created_at"] = row["created_at"].as<std::time_t>();
         ej["kind"] = row["kind"].as<int>();
         const char *j = row["tags"].c_str();
         ej["tags"] = nlohmann::json::parse(j);
@@ -444,7 +444,7 @@ static void storage_init(const std::string &dsn) {
       CREATE TABLE IF NOT EXISTS event (
         id text NOT NULL,
         pubkey text NOT NULL,
-        created_at integer NOT NULL,
+        created_at bigint NOT NULL,
         kind integer NOT NULL,
         tags jsonb NOT NULL,
         content text NOT NULL,
@@ -453,6 +453,15 @@ static void storage_init(const std::string &dsn) {
         tagvalues text[] GENERATED ALWAYS AS (tags_to_tagvalues(tags)) STORED
       );
       
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM pg_attribute
+                   WHERE attrelid = 'event'::regclass
+                     AND attname = 'created_at'
+                     AND atttypid = 'integer'::regtype) THEN
+          ALTER TABLE event ALTER COLUMN created_at TYPE bigint;
+        END IF;
+      END $$;
+
       CREATE UNIQUE INDEX IF NOT EXISTS ididx ON event USING btree (id text_pattern_ops);
       CREATE INDEX IF NOT EXISTS pubkeyprefix ON event USING btree (pubkey text_pattern_ops);
       CREATE INDEX IF NOT EXISTS timeidx ON event (created_at DESC);

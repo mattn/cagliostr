@@ -150,6 +150,45 @@ static void test_get_event_by_id() {
   storage_ctx.deinit();
 }
 
+static void test_wide_timestamps() {
+  auto storage_ctx = init_test_storage();
+  auto ev = make_event("timestamp-wide", "owner", 4102444800LL, 1, {}, "wide timestamp");
+  _ok(storage_ctx.insert_record(ev), "store timestamp beyond 2038");
+  auto found = storage_ctx.get_event_by_id(ev.id);
+  _ok(found && found->created_at == ev.created_at, "lookup preserves wide timestamp");
+  std::vector<nlohmann::json> replies;
+  filter_t filter;
+  filter.since = ev.created_at;
+  filter.until = ev.created_at;
+  _ok(storage_ctx.send_records([&](const nlohmann::json& r) { replies.push_back(r); },
+                               "wide", {filter}, false, nullptr), "query wide timestamp");
+  _ok(replies.size() == 1 && replies[0][2] == nlohmann::json(ev), "query preserves wide timestamp");
+  storage_ctx.deinit();
+}
+
+static void test_postgresql_timestamp_migration() {
+  const char* dsn = std::getenv("CAGLIOSTR_TEST_POSTGRES_DSN");
+  auto storage_ctx = init_test_storage();
+  storage_ctx.deinit();
+  {
+    pqxx::connection conn(dsn);
+    pqxx::work txn(conn);
+    txn.exec("ALTER TABLE event ALTER COLUMN created_at TYPE integer");
+    txn.exec("INSERT INTO event (id, pubkey, created_at, kind, tags, content, sig) "
+             "VALUES ('legacy', 'owner', 1700000000, 1, '[]', '', '')");
+    txn.commit();
+  }
+  storage_ctx.init(dsn);
+  auto legacy = storage_ctx.get_event_by_id("legacy");
+  _ok(legacy && legacy->created_at == 1700000000, "migration preserves existing event");
+  _ok(storage_ctx.insert_record(make_event("migrated-wide", "owner", 4102444800LL, 1, {}, "")),
+      "migrated table accepts wide timestamps");
+  storage_ctx.deinit();
+  storage_ctx.init(dsn);
+  _ok(storage_ctx.get_event_by_id("migrated-wide").has_value(), "migration is idempotent");
+  storage_ctx.deinit();
+}
+
 static void test_sqlite_event_roundtrip() {
   auto storage_ctx = init_test_storage();
   auto ev = make_event("roundtrip-wide", "owner", 4102444800LL, 30023,
@@ -546,6 +585,9 @@ int main() {
 
   subtest("test_cagliostr_records", test_cagliostr_records);
   subtest("test_event_json_roundtrip", test_event_json_roundtrip);
+  subtest("test_wide_timestamps", test_wide_timestamps);
+  if (std::getenv("CAGLIOSTR_TEST_POSTGRES_DSN"))
+    subtest("test_postgresql_timestamp_migration", test_postgresql_timestamp_migration);
   subtest("test_get_event_by_id", test_get_event_by_id);
   if (!std::getenv("CAGLIOSTR_TEST_POSTGRES_DSN"))
     subtest("test_sqlite_event_roundtrip", test_sqlite_event_roundtrip);
