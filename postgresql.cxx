@@ -213,23 +213,21 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         conditions.push_back("kind in (" + condition + ")");
       }
     }
-    if (!filter.tags.empty()) {
-      std::vector<std::string> match;
-      for (const auto &tag : filter.tags) {
-        if (tag.size() < 2) {
-          continue;
-        }
-        for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
-          params.append(tag[i]);
-        }
-        match.push_back(R"(tagvalues && ARRAY[)" +
-                        make_placeholders(tag.size() - 1, pno) + "]");
+    for (const auto &tag : filter.tags) {
+      if (tag.size() < 2) {
+        continue;
       }
-      if (match.size() == 1) {
-        conditions.push_back(match.front());
-      } else if (match.size() > 1) {
-        conditions.push_back("(" + join(match, " OR ") + ")");
+      params.append(tag[0]);
+      auto key = "$" + std::to_string(++pno);
+      for (size_t i = 1; i < tag.size(); ++i) {
+        params.append(tag[i]);
       }
+      auto values = make_placeholders(tag.size() - 1, pno);
+      // Keep the GIN-indexed value prefilter, then check the exact tag pair.
+      conditions.push_back("tagvalues && ARRAY[" + values + "]");
+      conditions.push_back(
+          "EXISTS (SELECT 1 FROM jsonb_array_elements(event.tags) AS tag "
+          "WHERE tag->>0 = " + key + " AND tag->>1 IN (" + values + "))");
     }
     if (filter.since != 0) {
       std::ostringstream os;

@@ -180,25 +180,20 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         conditions.push_back("kind in (" + condition + ")");
       }
     }
-    if (!filter.tags.empty()) {
-      std::vector<std::string> match;
-      for (const auto &tag : filter.tags) {
-        if (tag.size() < 2) {
-          continue;
-        }
-        auto first = tag[0];
-        for (decltype(tag.size()) i = 1; i < tag.size(); i++) {
-          nlohmann::json data = {first, tag[i]};
-          params.push_back({.t = PARAM_TYPE_STRING,
-                            .s = "%" + escape_like(data.dump()) + "%"});
-          match.push_back(R"(tags LIKE ? ESCAPE '\')");
-        }
+    for (const auto &tag : filter.tags) {
+      if (tag.size() < 2) {
+        continue;
       }
-      if (match.size() == 1) {
-        conditions.push_back(match.front());
-      } else if (match.size() > 1) {
-        conditions.push_back("(" + join(match, " OR ") + ")");
+      params.push_back({.t = PARAM_TYPE_STRING, .s = tag[0]});
+      std::vector<std::string> values;
+      for (size_t i = 1; i < tag.size(); ++i) {
+        values.push_back("?");
+        params.push_back({.t = PARAM_TYPE_STRING, .s = tag[i]});
       }
+      conditions.push_back(
+          "EXISTS (SELECT 1 FROM json_each(event.tags) AS tag "
+          "WHERE json_extract(tag.value, '$[0]') = ? "
+          "AND json_extract(tag.value, '$[1]') IN (" + join(values, ",") + "))");
     }
     if (filter.since != 0) {
       std::ostringstream os;
