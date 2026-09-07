@@ -2,6 +2,7 @@
 #define _CAGLIOSTR_H_
 
 #include <string>
+#include <charconv>
 #if defined(__GLIBC__)
 #include <malloc.h>
 #endif
@@ -124,6 +125,22 @@ inline bool created_at_within_limits(std::time_t created_at, std::time_t now,
     return false;
   }
   return true;
+}
+
+inline bool has_expired_tags(const std::vector<std::vector<std::string>> &tags,
+                             std::time_t now) {
+  for (const auto &tag : tags) {
+    if (tag.size() >= 2 && tag[0] == "expiration") {
+      std::time_t expiration = 0;
+      const auto *first = tag[1].data();
+      const auto *last = first + tag[1].size();
+      auto [ptr, ec] = std::from_chars(first, last, expiration);
+      if (ec == std::errc() && ptr == last && expiration <= now) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 inline std::string escape_like(const std::string &data) {

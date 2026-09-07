@@ -604,6 +604,19 @@ static void test_parse_a_coordinate() {
       "parse_a_coordinate rejects an empty value");
 }
 
+static void test_expiration_tags() {
+  _ok(!has_expired_tags({}, 100), "missing expiration is allowed");
+  _ok(!has_expired_tags({{"expiration"}}, 100), "missing expiration value is ignored");
+  _ok(has_expired_tags({{"expiration", "99"}}, 100), "past expiration is expired");
+  _ok(has_expired_tags({{"expiration", "100"}}, 100), "expiration boundary is expired");
+  _ok(!has_expired_tags({{"expiration", "101"}}, 100), "future expiration is allowed");
+  _ok(has_expired_tags({{"expiration", "99", "metadata"}}, 100), "extra fields do not hide expiration");
+  _ok(!has_expired_tags({{"expiration", "99junk"}}, 100), "partial timestamps are ignored");
+  _ok(!has_expired_tags({{"expiration", "9999999999999999999999999"}}, 100), "overflow does not wrap to expired");
+  _ok(has_expired_tags({{"expiration", "junk"}, {"expiration", "99"}}, 100), "malformed tag does not hide a valid expiration");
+  _ok(!has_expired_tags({{"expiration", "4102444800"}}, 100), "64-bit expiration is preserved");
+}
+
 static void test_created_at_within_limits() {
   std::time_t now = 1700000000;
 
@@ -647,6 +660,7 @@ int main() {
   subtest("test_cagliostr_delegation", test_cagliostr_delegation);
   subtest("test_count_leading_zero_bits", test_count_leading_zero_bits);
   subtest("test_parse_a_coordinate", test_parse_a_coordinate);
+  subtest("test_expiration_tags", test_expiration_tags);
   subtest("test_created_at_within_limits", test_created_at_within_limits);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
   return done_testing();
