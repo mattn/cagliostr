@@ -361,6 +361,36 @@ static void test_delete_record_by_id_and_kind_and_ptag() {
   storage_ctx.deinit();
 }
 
+static void test_deletion_tag_matching() {
+  auto storage_ctx = init_test_storage();
+  std::vector<std::vector<std::string>> variants = {
+      {"p", "recipient", "relay"}, {"p", "other", "recipient"},
+      {"recipient", "p"}, {"p", "RECIPIENT"}, {"P", "recipient"}
+  };
+  for (size_t i = 0; i < variants.size(); ++i) {
+    auto ev = make_event("delete-tag-" + std::to_string(i), "owner", 1700000000,
+                         1059, {variants[i]}, "");
+    _ok(storage_ctx.insert_record(ev), "insert gift wrap tag fixture");
+    _ok(storage_ctx.delete_record_by_id_and_kind_and_ptag(ev.id, 1059, {"p", "recipient"}) == (i == 0 ? 1 : 0),
+        "gift wrap deletion checks recipient in the second tag position");
+  }
+  auto target = make_event("delete-address-extra", "owner", 1700000000, 30023,
+                           {{"d", "article", "metadata"}}, "");
+  auto other = make_event("delete-address-other", "owner", 1700000000, 30023,
+                          {{"d", "other", "article"}}, "");
+  auto upper = make_event("delete-address-upper", "owner", 1700000000, 30023,
+                          {{"d", "ARTICLE"}}, "");
+  _ok(storage_ctx.insert_record(target), "insert address with extra tag field");
+  _ok(storage_ctx.insert_record(other), "insert address with value in metadata");
+  _ok(storage_ctx.insert_record(upper), "insert case-distinct address");
+  _ok(storage_ctx.delete_record_by_kind_and_pubkey_and_dtag(30023, "owner", {"d", "article"}, 1700000001) == 1,
+      "address deletion matches exact d tag value");
+  _ok(!storage_ctx.get_event_by_id(target.id), "matching address deleted");
+  _ok(storage_ctx.get_event_by_id(other.id).has_value(), "metadata does not identify an address");
+  _ok(storage_ctx.get_event_by_id(upper.id).has_value(), "address matching is case-sensitive");
+  storage_ctx.deinit();
+}
+
 static void test_delete_all_events_by_pubkey() {
   auto storage_ctx = init_test_storage();
   auto pubkey =
@@ -523,6 +553,7 @@ int main() {
   subtest("test_send_records_filters", test_send_records_filters);
   subtest("test_delete_record_by_id_and_kind_and_ptag",
           test_delete_record_by_id_and_kind_and_ptag);
+  subtest("test_deletion_tag_matching", test_deletion_tag_matching);
   subtest("test_delete_all_events_by_pubkey", test_delete_all_events_by_pubkey);
   subtest("test_cagliostr_sign", test_cagliostr_sign);
   subtest("test_cagliostr_delegation", test_cagliostr_delegation);
