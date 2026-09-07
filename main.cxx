@@ -599,6 +599,14 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
       return;
     }
 
+    // NIP-40: expired publications must not be stored or broadcast. Ephemeral
+    // events are exempt from expiration handling.
+    if (!(20000 <= ev.kind && ev.kind < 30000) &&
+        has_expired_tags(ev.tags, std::time(nullptr))) {
+      relay_ok(ws, ev.id, false, "invalid: event has expired");
+      return;
+    }
+
     // NIP-13: enforce proof of work when a minimum difficulty is required.
     int min_pow = nip11["limitation"]["min_pow_difficulty"];
     if (min_pow > 0) {

@@ -119,22 +119,6 @@ static bool insert_record(const event_t &ev) {
   }
 }
 
-static bool is_expired(std::vector<std::vector<std::string>> &tags) {
-  time_t now = time(nullptr);
-  for (const auto &tag : tags) {
-    if (tag.size() == 2 && tag[0] == "expiration") {
-      std::time_t expiration = 0;
-      auto first = tag[1].data();
-      auto last = first + tag[1].size();
-      auto [ptr, ec] = std::from_chars(first, last, expiration);
-      if (ec == std::errc() && ptr == last && expiration <= now) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 static std::string make_placeholders(size_t n, int &pno) {
   std::string placeholders;
   for (size_t i = 0; i < n; ++i) {
@@ -295,7 +279,7 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         if (ej["tags"].is_array() && ej["tags"].size() > 0) {
           std::vector<std::vector<std::string>> tags;
           ej["tags"].get_to(tags);
-          if (is_expired(tags)) {
+          if (has_expired_tags(tags, std::time(nullptr))) {
             continue;
           }
         }
