@@ -58,11 +58,12 @@ static std::optional<event_t> get_event_by_id(const std::string &id) {
   nlohmann::json ej;
   ej["id"] = (char *)sqlite3_column_text(stmt, 0);
   ej["pubkey"] = (char *)sqlite3_column_text(stmt, 1);
-  ej["created_at"] = sqlite3_column_int(stmt, 2);
+  ej["created_at"] = sqlite3_column_int64(stmt, 2);
   ej["kind"] = sqlite3_column_int(stmt, 3);
   const unsigned char *j = sqlite3_column_text(stmt, 4);
   ej["tags"] = nlohmann::json::parse(j);
-  ej["content"] = (char *)sqlite3_column_text(stmt, 5);
+  ej["content"] = std::string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)),
+                                    sqlite3_column_bytes(stmt, 5));
   ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
   sqlite3_finalize(stmt);
   return ej;
@@ -82,7 +83,7 @@ static bool insert_record(const event_t &ev) {
   sqlite3_bind_text(stmt, 1, ev.id.data(), (int)ev.id.size(), SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 2, ev.pubkey.data(), (int)ev.pubkey.size(),
                     SQLITE_TRANSIENT);
-  sqlite3_bind_int(stmt, 3, (int)ev.created_at);
+  sqlite3_bind_int64(stmt, 3, ev.created_at);
   sqlite3_bind_int(stmt, 4, ev.kind);
   sqlite3_bind_text(stmt, 5, s.data(), (int)s.size(), SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 6, ev.content.data(), (int)ev.content.size(),
@@ -275,11 +276,12 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
         nlohmann::json ej;
         ej["id"] = (char *)sqlite3_column_text(stmt, 0);
         ej["pubkey"] = (char *)sqlite3_column_text(stmt, 1);
-        ej["created_at"] = sqlite3_column_int(stmt, 2);
+        ej["created_at"] = sqlite3_column_int64(stmt, 2);
         ej["kind"] = sqlite3_column_int(stmt, 3);
         const unsigned char *j = sqlite3_column_text(stmt, 4);
         ej["tags"] = nlohmann::json::parse(j);
-        ej["content"] = (char *)sqlite3_column_text(stmt, 5);
+        ej["content"] = std::string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)),
+                                    sqlite3_column_bytes(stmt, 5));
         ej["sig"] = (char *)sqlite3_column_text(stmt, 6);
 
         if (ej["tags"].is_array() && ej["tags"].size() > 0) {
@@ -343,7 +345,7 @@ static int delete_record_by_kind_and_pubkey(int kind, const std::string &pubkey,
   sqlite3_bind_int(stmt, 1, kind);
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(),
                     SQLITE_TRANSIENT);
-  sqlite3_bind_int(stmt, 3, created_at);
+  sqlite3_bind_int64(stmt, 3, created_at);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {
@@ -378,7 +380,7 @@ delete_record_by_kind_and_pubkey_and_dtag(int kind, const std::string &pubkey,
   sqlite3_bind_text(stmt, 2, pubkey.data(), (int)pubkey.size(),
                     SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 3, s.data(), (int)s.size(), SQLITE_TRANSIENT);
-  sqlite3_bind_int(stmt, 4, created_at);
+  sqlite3_bind_int64(stmt, 4, created_at);
 
   std::vector<std::string> ids;
   while (true) {
@@ -499,7 +501,7 @@ static int delete_all_events_by_pubkey(const std::string &pubkey,
   }
   sqlite3_bind_text(stmt, 1, pubkey.data(), (int)pubkey.size(),
                     SQLITE_TRANSIENT);
-  sqlite3_bind_int(stmt, 2, created_at);
+  sqlite3_bind_int64(stmt, 2, created_at);
 
   ret = sqlite3_step(stmt);
   if (ret != SQLITE_DONE) {

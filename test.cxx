@@ -139,6 +139,39 @@ static void test_get_event_by_id() {
   storage_ctx.deinit();
 }
 
+static void test_sqlite_event_roundtrip() {
+  auto storage_ctx = init_test_storage();
+  auto ev = make_event("roundtrip-wide", "owner", 4102444800LL, 30023,
+                       {{"d", "wide"}}, std::string("before\0after", 12));
+  _ok(storage_ctx.insert_record(ev), "insert event with wide timestamp and NUL");
+  auto found = storage_ctx.get_event_by_id(ev.id);
+  _ok(found && found->created_at == ev.created_at, "lookup preserves 64-bit timestamp");
+  _ok(found && found->content == ev.content, "lookup preserves embedded NUL");
+  std::vector<nlohmann::json> replies;
+  filter_t filter;
+  filter.since = ev.created_at;
+  filter.until = ev.created_at;
+  _ok(storage_ctx.send_records([&](const nlohmann::json& r) { replies.push_back(r); },
+                               "roundtrip", {filter}, false, nullptr), "query wide timestamp");
+  _ok(replies.size() == 1 && replies[0][2] == nlohmann::json(ev),
+      "subscription preserves complete event");
+  _ok(storage_ctx.delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey, ev.created_at) == 0,
+      "replacement preserves equal timestamp");
+  _ok(storage_ctx.delete_record_by_kind_and_pubkey(ev.kind, ev.pubkey, ev.created_at + 1) == 1,
+      "replacement uses 64-bit cutoff");
+  _ok(storage_ctx.insert_record(ev), "reinsert for address deletion");
+  _ok(storage_ctx.delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey, {"d", "wide"}, ev.created_at) == 0,
+      "address deletion preserves equal timestamp");
+  _ok(storage_ctx.delete_record_by_kind_and_pubkey_and_dtag(ev.kind, ev.pubkey, {"d", "wide"}, ev.created_at + 1) == 1,
+      "address deletion uses 64-bit cutoff");
+  _ok(storage_ctx.insert_record(ev), "reinsert for vanish");
+  _ok(storage_ctx.delete_all_events_by_pubkey(ev.pubkey, ev.created_at - 1) == 0,
+      "vanish preserves newer event");
+  _ok(storage_ctx.delete_all_events_by_pubkey(ev.pubkey, ev.created_at) == 1,
+      "vanish uses 64-bit cutoff");
+  storage_ctx.deinit();
+}
+
 static void test_send_records_filters() {
   auto storage_ctx = init_test_storage();
   auto pubkey1 =
@@ -443,6 +476,7 @@ int main() {
   subtest("test_cagliostr_records", test_cagliostr_records);
   subtest("test_event_json_roundtrip", test_event_json_roundtrip);
   subtest("test_get_event_by_id", test_get_event_by_id);
+  subtest("test_sqlite_event_roundtrip", test_sqlite_event_roundtrip);
   subtest("test_send_records_filters", test_send_records_filters);
   subtest("test_delete_record_by_id_and_kind_and_ptag",
           test_delete_record_by_id_and_kind_and_ptag);
