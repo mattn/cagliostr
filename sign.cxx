@@ -24,6 +24,9 @@ static inline int hex_value(char c) {
 
 static inline std::vector<uint8_t> hex2bytes(const std::string &hex) {
   std::vector<uint8_t> bytes;
+  if (hex.size() % 2 != 0) {
+    return bytes;
+  }
   bytes.reserve(hex.size() / 2);
   for (size_t i = 0; i + 1 < hex.size(); i += 2) {
     auto hi = hex_value(hex[i]);

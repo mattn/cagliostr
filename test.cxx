@@ -450,6 +450,16 @@ static void test_cagliostr_sign() {
 
   _ok(check_event(ev), "check_event should be succeeded for valid sig");
 
+  const auto valid_sig = ev.sig;
+  ev.sig += '0';
+  _ok(!check_event(ev), "signature with trailing half-byte is rejected");
+  ev.sig = valid_sig + "z";
+  _ok(!check_event(ev), "signature with trailing non-hex character is rejected");
+  ev.sig = valid_sig.substr(0, 127);
+  _ok(!check_event(ev), "truncated signature is rejected");
+  ev.sig = valid_sig;
+
+
   ev.sig = "757a1864233031b013eef28b4e47e16bfe15055e5488735f869270f4488875aad56399fc2b28468617470698b586ddeff5261e7dc386178817d2ce0d6ea36302";
   _ok(!check_event(ev), "check_event should be failed for invalid sig");
 }
