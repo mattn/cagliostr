@@ -19,3 +19,7 @@ deps/jtv-libpqxx/include
 deps/jtv-libpqxx/build/include
 -I
 deps/h2o-picotest
+-I
+deps/redis-hiredis/build/install/include
+-I
+deps/sewenew-redis-plus-plus/build/install/include

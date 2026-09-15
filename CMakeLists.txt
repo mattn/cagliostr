@@ -44,6 +44,33 @@ add_custom_command(
 )
 
 #--------------------------------------------------
+# hiredis
+set(HIREDIS_PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps/redis-hiredis/build/install)
+set(HIREDIS_LIBRARIES ${HIREDIS_PREFIX}/lib/libhiredis.a)
+add_custom_target(hiredis DEPENDS ${HIREDIS_LIBRARIES})
+add_custom_command(
+    OUTPUT ${HIREDIS_LIBRARIES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/redis-hiredis
+    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D BUILD_SHARED_LIBS=OFF -D DISABLE_TESTS=ON -D CMAKE_INSTALL_PREFIX=${HIREDIS_PREFIX} -D CMAKE_INSTALL_LIBDIR=lib
+    COMMAND ${CMAKE_COMMAND} --build build
+    COMMAND ${CMAKE_COMMAND} --install build
+)
+
+#--------------------------------------------------
+# redis-plus-plus
+set(REDIS_PLUS_PLUS_PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps/sewenew-redis-plus-plus/build/install)
+set(REDIS_PLUS_PLUS_LIBRARIES ${REDIS_PLUS_PLUS_PREFIX}/lib/libredis++.a)
+add_custom_target(redis-plus-plus DEPENDS ${REDIS_PLUS_PLUS_LIBRARIES})
+add_custom_command(
+    OUTPUT ${REDIS_PLUS_PLUS_LIBRARIES}
+    DEPENDS ${HIREDIS_LIBRARIES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/sewenew-redis-plus-plus
+    COMMAND ${CMAKE_COMMAND} -B build -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -D CMAKE_PREFIX_PATH=${HIREDIS_PREFIX} -D REDIS_PLUS_PLUS_CXX_STANDARD=20 -D REDIS_PLUS_PLUS_BUILD_SHARED=OFF -D REDIS_PLUS_PLUS_BUILD_TEST=OFF -D CMAKE_INSTALL_PREFIX=${REDIS_PLUS_PLUS_PREFIX} -D CMAKE_INSTALL_LIBDIR=lib
+    COMMAND ${CMAKE_COMMAND} --build build
+    COMMAND ${CMAKE_COMMAND} --install build
+)
+
+#--------------------------------------------------
 # cagliostr-core
 set_property(GLOBAL APPEND PROPERTY ADDITIONAL_CLEAN_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/gabime-spdlog/build/CMakeFiles"
@@ -55,6 +82,8 @@ set_property(GLOBAL APPEND PROPERTY ADDITIONAL_CLEAN_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/CMakeFiles"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/Makefile"
     "${CMAKE_CURRENT_SOURCE_DIR}/deps/jtv-libpqxx/build/cmake_install.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/redis-hiredis/build"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deps/sewenew-redis-plus-plus/build"
 )
 
 #--------------------------------------------------
@@ -71,9 +100,15 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/deps/unetworking-uwebsockets/src
     ${PROJECT_SOURCE_DIR}/deps/unetworking-usockets/src
 )
+# SYSTEM: hiredis headers use flexible array members, which -pedantic flags.
+include_directories(SYSTEM
+    ${HIREDIS_PREFIX}/include
+    ${REDIS_PLUS_PLUS_PREFIX}/include
+)
 add_library (${t_} INTERFACE)
 add_dependencies(${t_} usockets)
 add_dependencies(${t_} libsecp256k1)
+add_dependencies(${t_} redis-plus-plus)
 add_dependencies(${t_} libspdlog)
 target_link_libraries(${t_} INTERFACE crypto)
 target_link_libraries(${t_} INTERFACE ssl)
@@ -82,6 +117,8 @@ target_link_libraries(${t_} INTERFACE ${USOCKETS_LIBRARIES})
 target_link_libraries(${t_} INTERFACE pqxx)
 target_link_libraries(${t_} INTERFACE ${LIBSECP256K1_LIBRARIES})
 target_link_libraries(${t_} INTERFACE pq)
+target_link_libraries(${t_} INTERFACE ${REDIS_PLUS_PLUS_LIBRARIES})
+target_link_libraries(${t_} INTERFACE ${HIREDIS_LIBRARIES})
 target_link_libraries(${t_} INTERFACE z)
 if (WIN32)
 target_link_libraries(${t_} INTERFACE secur32 ws2_32 dbghelp userenv iphlpapi bcrypt)
@@ -99,7 +136,7 @@ endif()
 #--------------------------------------------------
 # cagliostr
 set (t_ cagliostr)
-add_executable(${t_} main.cxx sqlite3.cxx postgresql.cxx sign.cxx)
+add_executable(${t_} main.cxx sqlite3.cxx postgresql.cxx sign.cxx notifier.cxx)
 target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 #--------------------------------------------------
@@ -109,7 +146,7 @@ include_directories(
     ${t_}
     ${PROJECT_SOURCE_DIR}/deps/h2o-picotest
 )
-add_executable(${t_} test.cxx ${PROJECT_SOURCE_DIR}/deps/h2o-picotest/picotest.c sqlite3.cxx postgresql.cxx sign.cxx)
+add_executable(${t_} test.cxx ${PROJECT_SOURCE_DIR}/deps/h2o-picotest/picotest.c sqlite3.cxx postgresql.cxx sign.cxx notifier.cxx)
 target_link_libraries(${t_} PRIVATE cagliostr-core)
 
 enable_testing()

@@ -7,6 +7,7 @@
 #include <malloc.h>
 #endif
 
+#include <functional>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <spdlog/common.h>
@@ -57,6 +58,17 @@ void storage_context_init_sqlite3(storage_context_t &);
 void storage_context_init_postgresql(storage_context_t &);
 
 bool check_event(const event_t &);
+
+// Redis pub/sub notifier used to propagate accepted events between relay
+// instances. When notifier_init() has not been called every function is a
+// cheap no-op and events are only delivered to this instance's clients.
+// on_event is invoked on the notifier's own thread, only for events that
+// passed check_event().
+bool notifier_init(const std::string &url, const std::string &channel,
+                   std::function<void(const event_t &)> on_event);
+void notifier_deinit();
+bool notifier_enabled();
+bool notifier_publish(const event_t &);
 
 // NIP-13: count the number of leading zero bits in a hex-encoded event id.
 int count_leading_zero_bits(const std::string &);

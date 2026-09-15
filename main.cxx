@@ -5,12 +5,14 @@
 
 #include <App.h>
 
+#include <deque>
 #include <iomanip>
 #include <memory>
 #include <mutex>
 #include <random>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 #ifdef _WIN32
 #include <bcrypt.h>
@@ -566,6 +568,61 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   return found;
 }
 
+// Deliver ev to every local subscription whose filters match. Runs on the
+// event-loop thread.
+static void deliver_event(const event_t &ev) {
+  for (const auto &s : subscribers) {
+    if (matched_filters(s.filters, ev) &&
+        can_serve_gift_wrap(s.ws, ev.kind, ev.tags)) {
+      nlohmann::json reply = {"EVENT", s.sub, ev};
+      relay_send(s.ws, reply);
+    }
+  }
+}
+
+// Ids of events this instance broadcast itself, so that their echo from the
+// Redis channel is not delivered a second time. Bounded FIFO; only touched on
+// the event-loop thread and only when Redis is configured.
+static std::unordered_set<std::string> local_event_ids;
+static std::deque<std::string> local_event_order;
+static constexpr size_t local_event_ids_max = 4096;
+
+static void remember_local_event(const std::string &id) {
+  if (!local_event_ids.insert(id).second) {
+    return;
+  }
+  local_event_order.push_back(id);
+  if (local_event_order.size() > local_event_ids_max) {
+    local_event_ids.erase(local_event_order.front());
+    local_event_order.pop_front();
+  }
+}
+
+static bool forget_local_event(const std::string &id) {
+  return local_event_ids.erase(id) > 0;
+}
+
+// Fan an accepted event out to subscribers. Local clients are always served
+// directly so that a Redis outage or a subscriber reconnect never costs them
+// an event; with Redis configured the event is also published for the other
+// instances.
+static void broadcast_event(const event_t &ev) {
+  deliver_event(ev);
+  if (notifier_enabled()) {
+    remember_local_event(ev.id);
+    notifier_publish(ev);
+  }
+}
+
+// Deliver an event received from the Redis channel unless it is the echo of
+// one this instance already delivered.
+static void deliver_remote_event(const event_t &ev) {
+  if (forget_local_event(ev.id)) {
+    return;
+  }
+  deliver_event(ev);
+}
+
 static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
   try {
     const event_t ev = data[1];
@@ -728,24 +785,13 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
 
       nlohmann::json ok_reply = {"OK", ev.id, true, ""};
       relay_send(ws, ok_reply);
-      for (const auto &s : subscribers) {
-        if (matched_filters(s.filters, ev)) {
-          nlohmann::json reply = {"EVENT", s.sub, ev};
-          relay_send(s.ws, reply);
-        }
-      }
+      broadcast_event(ev);
       return;
     } else {
       if (20000 <= ev.kind && ev.kind < 30000) {
         nlohmann::json ok_reply = {"OK", ev.id, true, ""};
         relay_send(ws, ok_reply);
-        for (const auto &s : subscribers) {
-          if (matched_filters(s.filters, ev) &&
-              can_serve_gift_wrap(s.ws, ev.kind, ev.tags)) {
-            nlohmann::json fwd = {"EVENT", s.sub, ev};
-            relay_send(s.ws, fwd);
-          }
-        }
+        broadcast_event(ev);
         return;
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
@@ -775,13 +821,7 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
 
     nlohmann::json reply = {"OK", ev.id, true, ""};
     relay_send(ws, reply);
-    for (const auto &s : subscribers) {
-      if (matched_filters(s.filters, ev) &&
-          can_serve_gift_wrap(s.ws, ev.kind, ev.tags)) {
-        nlohmann::json reply = {"EVENT", s.sub, ev};
-        relay_send(s.ws, reply);
-      }
-    }
+    broadcast_event(ev);
   } catch (std::exception &e) {
     console->warn("!! {}", e.what());
   }
@@ -1192,6 +1232,12 @@ int main(int argc, char *argv[]) {
         .metavar("SECONDS")
         .scan<'i', int>()
         .nargs(1);
+    program.add_argument("-redis")
+        .default_value(env("REDIS_URL", ""))
+        .help("Redis URL to propagate events between instances "
+              "(e.g. redis://localhost:6379)")
+        .metavar("REDIS_URL")
+        .nargs(1);
     program.add_argument("-port")
         .default_value(static_cast<short>(7447))
         .help("port number")
@@ -1248,11 +1294,30 @@ int main(int argc, char *argv[]) {
   created_at_lower_limit = program.get<int>("-created-at-lower-limit");
   created_at_upper_limit = program.get<int>("-created-at-upper-limit");
 
+  const auto redis_url = program.get<std::string>("-redis");
+  if (!redis_url.empty()) {
+    // The loop is thread-local and server() runs on this same thread, so
+    // fetching it here yields the loop the app will run on.
+    auto *loop = uWS::Loop::get();
+    const auto channel = env("REDIS_CHANNEL", "cagliostr:events");
+    const auto ok =
+        notifier_init(redis_url, channel, [loop](const event_t &ev) {
+          // Arrives on the notifier thread; subscribers and their sockets may
+          // only be touched from the loop thread.
+          loop->defer([ev] { deliver_remote_event(ev); });
+        });
+    if (!ok) {
+      storage_ctx.deinit();
+      return 1;
+    }
+  }
+
   // Setup signal handler
   std::signal(SIGINT, signal_handler);
 
   server(program.get<short>("-port"));
 
+  notifier_deinit();
   storage_ctx.deinit();
   return 0;
 }
