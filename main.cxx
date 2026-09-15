@@ -566,6 +566,29 @@ static bool matched_filters(const std::vector<filter_t> &filters,
   return found;
 }
 
+// Deliver ev to every local subscription whose filters match. Runs on the
+// event-loop thread.
+static void deliver_event(const event_t &ev) {
+  for (const auto &s : subscribers) {
+    if (matched_filters(s.filters, ev) &&
+        can_serve_gift_wrap(s.ws, ev.kind, ev.tags)) {
+      nlohmann::json reply = {"EVENT", s.sub, ev};
+      relay_send(s.ws, reply);
+    }
+  }
+}
+
+// Fan an accepted event out to subscribers. With Redis configured the event
+// goes through the channel so that every instance, this one included,
+// delivers it from the subscription; otherwise, or when publishing fails, it
+// is delivered directly.
+static void broadcast_event(const event_t &ev) {
+  if (notifier_enabled() && notifier_publish(ev)) {
+    return;
+  }
+  deliver_event(ev);
+}
+
 static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
   try {
     const event_t ev = data[1];
@@ -728,24 +751,13 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
 
       nlohmann::json ok_reply = {"OK", ev.id, true, ""};
       relay_send(ws, ok_reply);
-      for (const auto &s : subscribers) {
-        if (matched_filters(s.filters, ev)) {
-          nlohmann::json reply = {"EVENT", s.sub, ev};
-          relay_send(s.ws, reply);
-        }
-      }
+      broadcast_event(ev);
       return;
     } else {
       if (20000 <= ev.kind && ev.kind < 30000) {
         nlohmann::json ok_reply = {"OK", ev.id, true, ""};
         relay_send(ws, ok_reply);
-        for (const auto &s : subscribers) {
-          if (matched_filters(s.filters, ev) &&
-              can_serve_gift_wrap(s.ws, ev.kind, ev.tags)) {
-            nlohmann::json fwd = {"EVENT", s.sub, ev};
-            relay_send(s.ws, fwd);
-          }
-        }
+        broadcast_event(ev);
         return;
       } else if (ev.kind == 0 || ev.kind == 3 ||
                  (10000 <= ev.kind && ev.kind < 20000)) {
@@ -775,13 +787,7 @@ static void do_relay_event(WebSocket *ws, const nlohmann::json &data) {
 
     nlohmann::json reply = {"OK", ev.id, true, ""};
     relay_send(ws, reply);
-    for (const auto &s : subscribers) {
-      if (matched_filters(s.filters, ev) &&
-          can_serve_gift_wrap(s.ws, ev.kind, ev.tags)) {
-        nlohmann::json reply = {"EVENT", s.sub, ev};
-        relay_send(s.ws, reply);
-      }
-    }
+    broadcast_event(ev);
   } catch (std::exception &e) {
     console->warn("!! {}", e.what());
   }
@@ -1192,6 +1198,12 @@ int main(int argc, char *argv[]) {
         .metavar("SECONDS")
         .scan<'i', int>()
         .nargs(1);
+    program.add_argument("-redis")
+        .default_value(env("REDIS_URL", ""))
+        .help("Redis URL to propagate events between instances "
+              "(e.g. redis://localhost:6379)")
+        .metavar("REDIS_URL")
+        .nargs(1);
     program.add_argument("-port")
         .default_value(static_cast<short>(7447))
         .help("port number")
@@ -1248,11 +1260,30 @@ int main(int argc, char *argv[]) {
   created_at_lower_limit = program.get<int>("-created-at-lower-limit");
   created_at_upper_limit = program.get<int>("-created-at-upper-limit");
 
+  const auto redis_url = program.get<std::string>("-redis");
+  if (!redis_url.empty()) {
+    // The loop is thread-local and server() runs on this same thread, so
+    // fetching it here yields the loop the app will run on.
+    auto *loop = uWS::Loop::get();
+    const auto channel = env("REDIS_CHANNEL", "cagliostr:events");
+    const auto ok =
+        notifier_init(redis_url, channel, [loop](const event_t &ev) {
+          // Arrives on the notifier thread; subscribers and their sockets may
+          // only be touched from the loop thread.
+          loop->defer([ev] { deliver_event(ev); });
+        });
+    if (!ok) {
+      storage_ctx.deinit();
+      return 1;
+    }
+  }
+
   // Setup signal handler
   std::signal(SIGINT, signal_handler);
 
   server(program.get<short>("-port"));
 
+  notifier_deinit();
   storage_ctx.deinit();
   return 0;
 }

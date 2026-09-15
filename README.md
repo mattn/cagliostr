@@ -18,6 +18,28 @@ Optional arguments:
   -loglevel LEVEL     log level [default: "info"]
 ```
 
+## Running several instances
+
+With `-redis` (or `$REDIS_URL`), every accepted event is published on a Redis
+pub/sub channel and delivered by all instances subscribed to it, so clients
+connected to different instances see each other's events in real time. The
+storage does not have to be shared for this to work.
+
+```
+$ ./cagliostr -port 7447 -database a.sqlite -redis redis://localhost:6379 &
+$ ./cagliostr -port 7448 -database b.sqlite -redis redis://localhost:6379 &
+```
+
+The URL follows [redis-plus-plus](https://github.com/sewenew/redis-plus-plus)
+conventions, e.g. `redis://user:password@host:6379/0` or
+`unix:///var/run/redis.sock`. Set `REDIS_CHANNEL` (default `cagliostr:events`)
+to keep several relays on one Redis apart. The payload is the bare event JSON,
+which is what [nostr-relay](https://github.com/mattn/nostr-relay) publishes
+too, so both can share a channel.
+
+Without `-redis` nothing changes: events are delivered in-process as before
+and no Redis code path is exercised.
+
 ## Requirements
 
 * OpenSSL

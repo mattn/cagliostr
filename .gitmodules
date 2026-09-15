@@ -26,3 +26,11 @@
 	path = deps/unetworking-usockets
 	url = https://github.com/uNetworking/uSockets.git
 	ignore = dirty
+[submodule "deps/redis-hiredis"]
+	path = deps/redis-hiredis
+	url = https://github.com/redis/hiredis
+	ignore = dirty
+[submodule "deps/sewenew-redis-plus-plus"]
+	path = deps/sewenew-redis-plus-plus
+	url = https://github.com/sewenew/redis-plus-plus
+	ignore = dirty
