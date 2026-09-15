@@ -40,6 +40,14 @@ void subscribe_loop(notifier_t &n) {
       sub.on_message([&n](std::string /*channel*/, std::string msg) {
         try {
           const event_t ev = nlohmann::json::parse(msg);
+          // Anyone able to PUBLISH on the channel could inject events, so
+          // verify them exactly like those received over WebSocket.
+          if (!check_event(ev)) {
+            console->warn("!! dropping redis notification with invalid "
+                          "id or signature: {}",
+                          ev.id);
+            return;
+          }
           n.on_event(ev);
         } catch (const std::exception &e) {
           console->warn("!! dropping malformed redis notification: {}",

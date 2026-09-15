@@ -62,7 +62,8 @@ bool check_event(const event_t &);
 // Redis pub/sub notifier used to propagate accepted events between relay
 // instances. When notifier_init() has not been called every function is a
 // cheap no-op and events are only delivered to this instance's clients.
-// on_event is invoked on the notifier's own thread.
+// on_event is invoked on the notifier's own thread, only for events that
+// passed check_event().
 bool notifier_init(const std::string &url, const std::string &channel,
                    std::function<void(const event_t &)> on_event);
 void notifier_deinit();
