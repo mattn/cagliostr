@@ -33,6 +33,8 @@ using filter_t = struct filter_t {
   std::optional<std::time_t> until;
   int limit{500};
   std::string search;
+  // NIP-01: an empty ids/authors/kinds/tag list can never be satisfied.
+  bool match_nothing{false};
 };
 
 using storage_context_t = struct storage_context_t {

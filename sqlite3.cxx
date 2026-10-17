@@ -128,6 +128,9 @@ static bool send_records(std::function<void(const nlohmann::json &)> sender,
       params.clear();
     }
     std::vector<std::string> conditions;
+    if (filter.match_nothing) {
+      conditions.push_back("1=0");
+    }
     if (!filter.ids.empty()) {
       if (filter.ids.size() == 1) {
         conditions.push_back("id = ?");

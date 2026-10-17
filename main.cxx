@@ -247,6 +247,9 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
       console->warn("make_filter: ids must be array");
       return false;
     }
+    if (data["ids"].empty()) {
+      filter.match_nothing = true;
+    }
     for (const auto &id : data["ids"]) {
       if (!id.is_string()) {
         console->warn("make_filter: ids elements must be string");
@@ -274,6 +277,9 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
     if (!data["authors"].is_array()) {
       console->warn("make_filter: authors must be array");
       return false;
+    }
+    if (data["authors"].empty()) {
+      filter.match_nothing = true;
     }
     for (const auto &author : data["authors"]) {
       if (!author.is_string()) {
@@ -306,6 +312,9 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
       console->warn("make_filter: kinds must be array");
       return false;
     }
+    if (data["kinds"].empty()) {
+      filter.match_nothing = true;
+    }
     for (const auto &kind : data["kinds"]) {
       if (!kind.is_number_integer()) {
         console->warn("make_filter: kinds elements must be integer");
@@ -316,6 +325,9 @@ static bool make_filter(filter_t &filter, const nlohmann::json &data) {
   }
   for (auto it = data.cbegin(); it != data.cend(); ++it) {
     if (!it.key().empty() && it.key().front() == '#' && it.value().is_array()) {
+      if (it.value().empty()) {
+        filter.match_nothing = true;
+      }
       std::vector<std::string> tag = {it.key().substr(1)};
       for (const auto &v : it.value()) {
         if (!v.is_string()) {
@@ -485,6 +497,9 @@ static bool matched_filters(const std::vector<filter_t> &filters,
                             const event_t &ev) {
   auto found = false;
   for (const auto &filter : filters) {
+    if (filter.match_nothing) {
+      continue;
+    }
     if (!filter.ids.empty()) {
       const auto result =
           std::find(filter.ids.begin(), filter.ids.end(), ev.id);

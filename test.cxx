@@ -397,6 +397,28 @@ static void test_zero_time_filters() {
   storage_ctx.deinit();
 }
 
+static void test_match_nothing_filters() {
+  auto storage_ctx = init_test_storage();
+  _ok(storage_ctx.insert_record(make_event("empty-list", "owner", 1700000000, 1, {{"t", "one"}}, "")),
+      "insert empty-list fixture");
+  filter_t none;
+  none.match_nothing = true;
+  filter_t all;
+  auto query = [&](std::vector<filter_t> filters, int expected) {
+    int rows = 0;
+    _ok(storage_ctx.send_records([&](const nlohmann::json&) { rows++; },
+                                 "empty-list", filters, false, nullptr), "query empty-list filter");
+    _ok(rows == expected, "an empty filter list matches no event");
+    int count = -1;
+    _ok(storage_ctx.send_records([&](const nlohmann::json& r) { count = r[2]["count"]; },
+                                 "empty-list-count", filters, true, nullptr), "count empty-list filter");
+    _ok(count == expected, "count treats an empty filter list the same way");
+  };
+  query({none}, 0);
+  query({none, all}, 1);
+  storage_ctx.deinit();
+}
+
 static void test_tag_filter_matching() {
   auto storage_ctx = init_test_storage();
   std::vector<event_t> events = {
@@ -674,6 +696,7 @@ int main() {
     subtest("test_sqlite_event_roundtrip", test_sqlite_event_roundtrip);
   subtest("test_overlapping_filters", test_overlapping_filters);
   subtest("test_zero_time_filters", test_zero_time_filters);
+  subtest("test_match_nothing_filters", test_match_nothing_filters);
   subtest("test_tag_filter_matching", test_tag_filter_matching);
   subtest("test_send_records_filters", test_send_records_filters);
   subtest("test_delete_record_by_id_and_kind_and_ptag",
