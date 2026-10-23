@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <cstdlib>
 #include <pqxx/pqxx>
+#include <map>
 #include <vector>
 
 static event_t string2event(const std::string& string) {
@@ -683,6 +684,38 @@ static void test_created_at_within_limits() {
       "created_at_within_limits rejects beyond the lower limit");
 }
 
+static void test_apply_nip11_env() {
+  std::map<std::string, std::string> vars;
+  auto getenv = [&vars](const char *name) -> const char * {
+    auto it = vars.find(name);
+    return it == vars.end() ? nullptr : it->second.c_str();
+  };
+  auto doc = nlohmann::json{{"name", "cagliostr"}, {"fees", nlohmann::json::object()}};
+
+  apply_nip11_env(doc, getenv);
+  _ok(doc["name"] == "cagliostr", "unset variables must leave the document alone");
+  _ok(!doc.contains("payments_url"), "unset variables must not add fields");
+
+  vars = {{"RELAY_NAME", "my relay"},
+          {"RELAY_TERMS_OF_SERVICE", "https://example.com/tos"},
+          {"RELAY_PAYMENTS_URL", "https://example.com/pay"},
+          {"RELAY_FEES", R"({"publication":[{"kinds":[1],"amount":1000,"unit":"msats"}]})"}};
+  apply_nip11_env(doc, getenv);
+  _ok(doc["name"] == "my relay", "RELAY_NAME must set name");
+  _ok(doc["terms_of_service"] == "https://example.com/tos", "RELAY_TERMS_OF_SERVICE must set terms_of_service");
+  _ok(doc["payments_url"] == "https://example.com/pay", "RELAY_PAYMENTS_URL must set payments_url");
+  _ok(doc["fees"]["publication"][0]["amount"] == 1000, "RELAY_FEES must set fees");
+
+  bool thrown = false;
+  vars = {{"RELAY_FEES", "[1]"}};
+  try {
+    apply_nip11_env(doc, getenv);
+  } catch (const std::exception &) {
+    thrown = true;
+  }
+  _ok(thrown, "RELAY_FEES must be a JSON object");
+}
+
 int main() {
   spdlog::set_level(spdlog::level::off);
 
@@ -709,6 +742,7 @@ int main() {
   subtest("test_parse_a_coordinate", test_parse_a_coordinate);
   subtest("test_expiration_tags", test_expiration_tags);
   subtest("test_created_at_within_limits", test_created_at_within_limits);
+  subtest("test_apply_nip11_env", test_apply_nip11_env);
   subtest("test_sql_injection_protection", test_sql_injection_protection);
   return done_testing();
 }

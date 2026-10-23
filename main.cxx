@@ -67,6 +67,8 @@ static auto nip11 = nlohmann::json{
                                   {"max_subscriptions", 20},
                                   {"max_filters", 10},
                                   {"max_limit", 500},
+                                  // filter_t's limit when a filter has none
+                                  {"default_limit", 500},
                                   {"max_subid_length", 100},
                                   {"max_event_tags", 100},
                                   {"max_content_length", 16384},
@@ -1305,6 +1307,14 @@ int main(int argc, char *argv[]) {
   }
 
   nip11["limitation"]["min_pow_difficulty"] = program.get<int>("-min-pow");
+
+  try {
+    apply_nip11_env(nip11);
+  } catch (const std::exception &e) {
+    console->error("!! Invalid NIP-11 configuration: {}", e.what());
+    storage_ctx.deinit();
+    return 1;
+  }
 
   created_at_lower_limit = program.get<int>("-created-at-lower-limit");
   created_at_upper_limit = program.get<int>("-created-at-upper-limit");

@@ -18,6 +18,19 @@ Optional arguments:
   -loglevel LEVEL     log level [default: "info"]
 ```
 
+## NIP-11 information
+
+The relay information document can be filled from the environment:
+`RELAY_NAME`, `RELAY_DESCRIPTION`, `RELAY_PUBKEY`, `RELAY_SELF`,
+`RELAY_CONTACT`, `RELAY_ICON`, `RELAY_BANNER`, `RELAY_TERMS_OF_SERVICE`,
+`RELAY_POSTING_POLICY` and `RELAY_PAYMENTS_URL`. `RELAY_FEES` takes the `fees`
+object as JSON:
+
+```
+$ RELAY_NAME="my relay" RELAY_CONTACT=mailto:admin@example.com \
+  RELAY_FEES='{"admission":[{"amount":1000000,"unit":"msats"}]}' ./cagliostr
+```
+
 ## Running several instances
 
 With `-redis` (or `$REDIS_URL`), every accepted event is published on a Redis
