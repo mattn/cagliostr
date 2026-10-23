@@ -141,6 +141,39 @@ inline bool created_at_within_limits(std::time_t created_at, std::time_t now,
   return true;
 }
 
+// NIP-11: fill the relay information document from RELAY_* environment
+// variables, e.g. RELAY_NAME or RELAY_TERMS_OF_SERVICE. RELAY_FEES takes the
+// fees object as JSON and throws if it is not one.
+inline void apply_nip11_env(
+    nlohmann::json &doc,
+    const std::function<const char *(const char *)> &getenv = std::getenv) {
+  for (const auto &[name, field] :
+       std::initializer_list<std::pair<const char *, const char *>>{
+           {"RELAY_NAME", "name"},
+           {"RELAY_DESCRIPTION", "description"},
+           {"RELAY_PUBKEY", "pubkey"},
+           {"RELAY_SELF", "self"},
+           {"RELAY_CONTACT", "contact"},
+           {"RELAY_ICON", "icon"},
+           {"RELAY_BANNER", "banner"},
+           {"RELAY_TERMS_OF_SERVICE", "terms_of_service"},
+           {"RELAY_POSTING_POLICY", "posting_policy"},
+           {"RELAY_PAYMENTS_URL", "payments_url"}}) {
+    const char *value = getenv(name);
+    if (value && *value) {
+      doc[field] = value;
+    }
+  }
+  const char *fees = getenv("RELAY_FEES");
+  if (fees && *fees) {
+    auto parsed = nlohmann::json::parse(fees);
+    if (!parsed.is_object()) {
+      throw std::invalid_argument("RELAY_FEES must be a JSON object");
+    }
+    doc["fees"] = std::move(parsed);
+  }
+}
+
 inline bool has_expired_tags(const std::vector<std::vector<std::string>> &tags,
                              std::time_t now) {
   for (const auto &tag : tags) {
